@@ -1,46 +1,10 @@
 import { GoogleGenAI, Type, Modality } from "@google/genai";
 import { InspirationQuote } from "../types";
 
-// Função segura para recuperar a API Key em diferentes ambientes
-const getApiKey = (): string => {
-  let key = '';
-
-  // Tenta ler do padrão Vite (import.meta.env) de forma segura
-  try {
-    // @ts-ignore
-    if (typeof import.meta !== 'undefined' && import.meta.env && import.meta.env.VITE_API_KEY) {
-      // @ts-ignore
-      key = import.meta.env.VITE_API_KEY;
-    }
-  } catch (e) {
-    // Ignora erros de acesso ao import.meta
-  }
-
-  // Se não encontrou, tenta ler do process.env (ambiente legado/Node)
-  if (!key) {
-    try {
-      // @ts-ignore
-      if (typeof process !== 'undefined' && process.env && process.env.API_KEY) {
-        // @ts-ignore
-        key = process.env.API_KEY;
-      }
-    } catch (e) {
-      // Ignora erro se process não estiver definido
-    }
-  }
-
-  return key;
-};
-
-const apiKey = getApiKey();
-
-if (!apiKey) {
-  console.error("API KEY não encontrada! Verifique as configurações de ambiente (VITE_API_KEY).");
-}
-
-const ai = new GoogleGenAI({ apiKey: apiKey || '' });
-
 export const fetchDailyInspiration = async (excludeAuthors: string[] = []): Promise<InspirationQuote> => {
+  // Initialize the client with process.env.API_KEY directly as per guidelines.
+  const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+
   // Usamos um modelo mais capaz se disponível, ou o flash para rapidez
   const modelId = "gemini-2.5-flash";
   
@@ -58,8 +22,6 @@ export const fetchDailyInspiration = async (excludeAuthors: string[] = []): Prom
 
   // Seleciona um tema aleatório para esta requisição
   const randomTheme = themes[Math.floor(Math.random() * themes.length)];
-  
-  // Adiciona um fator aleatório para evitar cache semântico
   const randomSeed = Math.floor(Math.random() * 1000000);
 
   // Cria string de exclusão se houver autoras para evitar
@@ -115,7 +77,7 @@ export const fetchDailyInspiration = async (excludeAuthors: string[] = []): Prom
           },
           required: ["quote", "author", "role", "country"],
         },
-        temperature: 1.2, // Aumentei levemente para garantir mais variedade
+        temperature: 1.2,
       },
     });
 
@@ -129,7 +91,7 @@ export const fetchDailyInspiration = async (excludeAuthors: string[] = []): Prom
 
   } catch (error) {
     console.error("Error fetching quote from Gemini:", error);
-    // Fallback quote - Curta e Forte (caso de erro)
+    // Fallback quote - Curta e Forte (caso de erro na API)
     return {
       quote: "Pés, para que os quero, se tenho asas para voar?",
       author: "Frida Kahlo",
@@ -141,6 +103,8 @@ export const fetchDailyInspiration = async (excludeAuthors: string[] = []): Prom
 
 export const fetchQuoteAudio = async (text: string): Promise<string | null> => {
   try {
+    const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+    
     const response = await ai.models.generateContent({
       model: "gemini-2.5-flash-preview-tts",
       contents: {
@@ -150,7 +114,7 @@ export const fetchQuoteAudio = async (text: string): Promise<string | null> => {
         responseModalities: [Modality.AUDIO],
         speechConfig: {
           voiceConfig: {
-            prebuiltVoiceConfig: { voiceName: 'Kore' }, // Voz feminina natural
+            prebuiltVoiceConfig: { voiceName: 'Kore' },
           },
         },
       },
