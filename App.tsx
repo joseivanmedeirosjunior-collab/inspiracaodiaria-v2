@@ -21,7 +21,10 @@ export default function App() {
 
   // Handle Hash Change (Routing)
   useEffect(() => {
-    const handleHashChange = () => setCurrentPath(window.location.hash);
+    const handleHashChange = () => {
+      setCurrentPath(window.location.hash);
+      window.scrollTo(0, 0);
+    };
     window.addEventListener('hashchange', handleHashChange);
     return () => window.removeEventListener('hashchange', handleHashChange);
   }, []);
@@ -29,7 +32,6 @@ export default function App() {
   const loadData = useCallback(async () => {
     const todayDate = new Date();
     
-    // Formato: 14 de novembro de 2025
     const formattedDate = new Intl.DateTimeFormat('pt-BR', {
       day: 'numeric',
       month: 'long',
@@ -48,7 +50,7 @@ export default function App() {
         return;
       }
 
-      // 2. Se não tiver admin approved, usa lógica de cache diário local (fallback para usuário comum)
+      // 2. Se não tiver admin approved, usa lógica de cache diário local
       const todayKey = todayDate.toDateString();
       const storedDataString = localStorage.getItem(LOCAL_STORAGE_KEY);
 
@@ -68,15 +70,18 @@ export default function App() {
       }
 
       if (shouldFetch) {
-        // Se não tem aprovada, gera aleatória (fallback padrão)
-        const newData = await fetchDailyInspiration();
-        setQuoteData(newData);
-        
-        const dataToStore: DailyData = {
-          date: todayKey,
-          data: newData
-        };
-        localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(dataToStore));
+        try {
+          const newData = await fetchDailyInspiration();
+          setQuoteData(newData);
+          
+          const dataToStore: DailyData = {
+            date: todayKey,
+            data: newData
+          };
+          localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(dataToStore));
+        } catch (err: any) {
+          throw err;
+        }
       }
     } catch (error) {
       console.error("Failed to load daily quote", error);
@@ -86,7 +91,6 @@ export default function App() {
   }, []);
 
   useEffect(() => {
-    // Recarrega dados sempre que volta para a home (caso tenha mudado algo no admin)
     if (currentPath !== '#admin') {
       loadData();
     }
@@ -109,7 +113,6 @@ export default function App() {
       
       <main className="flex-grow flex flex-col items-center justify-start pt-4 pb-12 px-4 w-full">
         
-        {/* Título e Data */}
         <div className="flex flex-col items-center text-center mb-8 space-y-2 animate-fade-in">
           <div className="flex items-center gap-4 text-juro-primary opacity-70">
             <Sparkles size={20} />
@@ -123,7 +126,6 @@ export default function App() {
           </p>
         </div>
 
-        {/* Card da Frase */}
         <div className="container mx-auto flex justify-center">
             <QuoteCard data={quoteData} loading={loading} />
         </div>
