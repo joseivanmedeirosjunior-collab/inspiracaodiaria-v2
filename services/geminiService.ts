@@ -7,18 +7,16 @@ export const fetchDailyInspiration = async (): Promise<InspirationQuote> => {
   // Usamos um modelo mais capaz se disponível, ou o flash para rapidez
   const modelId = "gemini-2.5-flash";
   
-  // Lista de temas para forçar variedade e evitar sempre as mesmas autoras
+  // Lista de temas focados em Empoderamento e Força Feminina
   const themes = [
-    "Ciência, Tecnologia e Inovação",
-    "Literatura Africana ou Asiática",
-    "Ativismo Social e Direitos Humanos",
-    "Artes Plásticas e Cinema",
-    "Filosofia e Pensamento Crítico",
-    "Liderança Política e Diplomacia",
-    "Esporte e Superação",
-    "Empreendedorismo e Negócios",
-    "Poesia Latino-americana",
-    "História Antiga e Medieval"
+    "Autoestima e Amor Próprio Radical",
+    "Coragem para Quebrar Padrões",
+    "Resiliência e Superação de Desafios",
+    "Liderança Feminina e Ambição",
+    "Sororidade e Apoio entre Mulheres",
+    "Independência e Liberdade",
+    "Força Interior e Espiritualidade",
+    "Alegria de Viver e Ousadia"
   ];
 
   // Seleciona um tema aleatório para esta requisição
@@ -28,18 +26,20 @@ export const fetchDailyInspiration = async (): Promise<InspirationQuote> => {
   const randomSeed = Math.floor(Math.random() * 1000000);
 
   const prompt = `
-    Tarefa: Encontrar uma frase AUTÊNTICA e VERDADEIRA de uma mulher histórica ou contemporânea.
+    Tarefa: Encontrar uma frase CURTA, PODEROSA e MOTIVACIONAL de uma mulher inspiradora.
     
     CONTEXTO OBRIGATÓRIO DESTA BUSCA:
+    O objetivo é empoderar mulheres, trazer coragem e elevar a autoestima.
     Foco Temático: ${randomTheme}
-    Seed Aleatório: ${randomSeed} (Use isso para gerar algo diferente da última vez)
+    Seed Aleatório: ${randomSeed}
 
     Requisitos RÍGIDOS:
-    1. A autora deve ser mulher.
-    2. VERACIDADE: A frase deve ser realmente da autora. NÃO atribua frases genéricas de internet a autoras famosas. Se tiver dúvida, escolha outra autora.
-    3. DIVERSIDADE: Evite as autoras óbvias que aparecem sempre (como apenas Clarice Lispector ou Frida Kahlo). Busque vozes novas ou menos citadas dentro do tema "${randomTheme}".
-    4. A frase deve ser traduzida para o Português (Brasil) mantendo o sentido original.
-    5. Identifique a profissão e o país.
+    1. ESTILO: A frase deve ser CURTA e IMPACTANTE (máximo 1 ou 2 orações). Evite textos longos.
+    2. MENSAGEM: Deve transmitir força, coragem, determinação ou amor próprio. Algo que uma mulher leia e sinta vontade de conquistar o mundo.
+    3. AUTORA: Apenas mulheres. Tente variar entre clássicas e contemporâneas.
+    4. VERACIDADE: A frase deve ser autêntica.
+    5. DIVERSIDADE: Busque autoras de diferentes origens, não apenas americanas/europeias.
+    6. IDIOMA: Português do Brasil (tradução natural e fluida).
 
     Saída JSON esperada com: quote, author, role, country.
   `;
@@ -55,15 +55,15 @@ export const fetchDailyInspiration = async (): Promise<InspirationQuote> => {
           properties: {
             quote: {
               type: Type.STRING,
-              description: "A frase inspiradora autêntica em português."
+              description: "A frase curta e empoderadora em português."
             },
             author: {
               type: Type.STRING,
-              description: "Nome correto da autora."
+              description: "Nome da autora."
             },
             role: {
               type: Type.STRING,
-              description: "Papel da autora (ex: Astrônoma, Poeta, Líder Indígena)."
+              description: "Papel da autora (ex: Escritora, Ativista, Cantora)."
             },
             country: {
               type: Type.STRING,
@@ -72,7 +72,7 @@ export const fetchDailyInspiration = async (): Promise<InspirationQuote> => {
           },
           required: ["quote", "author", "role", "country"],
         },
-        temperature: 1.0, // Aumentado para garantir máxima criatividade e variedade
+        temperature: 1.1, // Alta temperatura para criatividade e variedade
       },
     });
 
@@ -86,12 +86,12 @@ export const fetchDailyInspiration = async (): Promise<InspirationQuote> => {
 
   } catch (error) {
     console.error("Error fetching quote from Gemini:", error);
-    // Fallback quote
+    // Fallback quote - Curta e Forte
     return {
-      quote: "Eu não sou livre enquanto alguma mulher não o for, mesmo quando as correntes dela forem muito diferentes das minhas.",
-      author: "Audre Lorde",
-      role: "Escritora e Ativista",
-      country: "EUA"
+      quote: "Pés, para que os quero, se tenho asas para voar?",
+      author: "Frida Kahlo",
+      role: "Pintora",
+      country: "México"
     };
   }
 };
