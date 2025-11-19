@@ -1,7 +1,44 @@
 import { GoogleGenAI, Type, Modality } from "@google/genai";
 import { InspirationQuote } from "../types";
 
-const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+// Função segura para recuperar a API Key em diferentes ambientes
+const getApiKey = (): string => {
+  let key = '';
+
+  // Tenta ler do padrão Vite (import.meta.env) de forma segura
+  try {
+    // @ts-ignore
+    if (typeof import.meta !== 'undefined' && import.meta.env && import.meta.env.VITE_API_KEY) {
+      // @ts-ignore
+      key = import.meta.env.VITE_API_KEY;
+    }
+  } catch (e) {
+    // Ignora erros de acesso ao import.meta
+  }
+
+  // Se não encontrou, tenta ler do process.env (ambiente legado/Node)
+  if (!key) {
+    try {
+      // @ts-ignore
+      if (typeof process !== 'undefined' && process.env && process.env.API_KEY) {
+        // @ts-ignore
+        key = process.env.API_KEY;
+      }
+    } catch (e) {
+      // Ignora erro se process não estiver definido
+    }
+  }
+
+  return key;
+};
+
+const apiKey = getApiKey();
+
+if (!apiKey) {
+  console.error("API KEY não encontrada! Verifique as configurações de ambiente (VITE_API_KEY).");
+}
+
+const ai = new GoogleGenAI({ apiKey: apiKey || '' });
 
 export const fetchDailyInspiration = async (excludeAuthors: string[] = []): Promise<InspirationQuote> => {
   // Usamos um modelo mais capaz se disponível, ou o flash para rapidez
