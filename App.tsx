@@ -1,0 +1,135 @@
+import React, { useEffect, useState, useCallback } from 'react';
+import { Header } from './components/Header';
+import { Footer } from './components/Footer';
+import { QuoteCard } from './components/QuoteCard';
+import { AdminPanel } from './components/AdminPanel';
+import { fetchDailyInspiration } from './services/geminiService';
+import { getQuoteForDate } from './services/queueService';
+import { InspirationQuote, DailyData } from './types';
+import { Sparkles } from 'lucide-react';
+
+const LOCAL_STORAGE_KEY = 'juro_daily_inspiration_v1';
+
+export default function App() {
+  // Routing State
+  const [currentPath, setCurrentPath] = useState(window.location.hash);
+
+  // App State
+  const [quoteData, setQuoteData] = useState<InspirationQuote | null>(null);
+  const [loading, setLoading] = useState<boolean>(true);
+  const [currentDate, setCurrentDate] = useState<string>('');
+
+  // Handle Hash Change (Routing)
+  useEffect(() => {
+    const handleHashChange = () => setCurrentPath(window.location.hash);
+    window.addEventListener('hashchange', handleHashChange);
+    return () => window.removeEventListener('hashchange', handleHashChange);
+  }, []);
+
+  const loadData = useCallback(async () => {
+    const todayDate = new Date();
+    
+    // Formato: 14 de novembro de 2025
+    const formattedDate = new Intl.DateTimeFormat('pt-BR', {
+      day: 'numeric',
+      month: 'long',
+      year: 'numeric'
+    }).format(todayDate);
+    
+    setCurrentDate(formattedDate);
+
+    // 1. Tenta pegar frase APROVADA pelo admin
+    const adminApprovedQuote = getQuoteForDate(todayDate);
+    if (adminApprovedQuote) {
+      setQuoteData(adminApprovedQuote);
+      setLoading(false);
+      return;
+    }
+
+    // 2. Se não tiver admin approved, usa lógica de cache diário local
+    const todayKey = todayDate.toDateString();
+    const storedDataString = localStorage.getItem(LOCAL_STORAGE_KEY);
+
+    let shouldFetch = true;
+
+    if (storedDataString) {
+      try {
+        const storedData: DailyData = JSON.parse(storedDataString);
+        if (storedData.date === todayKey) {
+          setQuoteData(storedData.data);
+          setLoading(false);
+          shouldFetch = false;
+        }
+      } catch (e) {
+        console.error("Error parsing stored data", e);
+      }
+    }
+
+    if (shouldFetch) {
+      setLoading(true);
+      try {
+        // Se não tem aprovada, gera aleatória
+        const newData = await fetchDailyInspiration();
+        setQuoteData(newData);
+        
+        const dataToStore: DailyData = {
+          date: todayKey,
+          data: newData
+        };
+        localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(dataToStore));
+      } catch (error) {
+        console.error("Failed to fetch daily quote", error);
+      } finally {
+        setLoading(false);
+      }
+    }
+  }, []);
+
+  useEffect(() => {
+    // Recarrega dados sempre que volta para a home (caso tenha mudado algo no admin)
+    if (currentPath !== '#admin') {
+      loadData();
+    }
+  }, [currentPath, loadData]);
+
+  // RENDER: Admin View
+  if (currentPath === '#admin') {
+    return (
+      <div className="min-h-screen flex flex-col bg-juro-bg selection:bg-juro-secondary selection:text-juro-primary">
+        <Header />
+        <AdminPanel />
+      </div>
+    );
+  }
+
+  // RENDER: Home View
+  return (
+    <div className="min-h-screen flex flex-col bg-juro-bg selection:bg-juro-secondary selection:text-juro-primary">
+      <Header />
+      
+      <main className="flex-grow flex flex-col items-center justify-start pt-4 pb-12 px-4 w-full">
+        
+        {/* Título e Data */}
+        <div className="flex flex-col items-center text-center mb-8 space-y-2 animate-fade-in">
+          <div className="flex items-center gap-4 text-juro-primary opacity-70">
+            <Sparkles size={20} />
+            <h1 className="font-serif text-4xl md:text-5xl font-bold text-juro-primary">
+              Inspiração Diária
+            </h1>
+            <Sparkles size={20} />
+          </div>
+          <p className="text-lg md:text-xl text-juro-text font-medium opacity-60 mt-2">
+            {currentDate}
+          </p>
+        </div>
+
+        {/* Card da Frase */}
+        <div className="container mx-auto flex justify-center">
+            <QuoteCard data={quoteData} loading={loading} />
+        </div>
+      </main>
+
+      <Footer />
+    </div>
+  );
+}
