@@ -2,13 +2,11 @@ import { GoogleGenAI, Type, Modality } from "@google/genai";
 import { InspirationQuote } from "../types";
 
 export const fetchDailyInspiration = async (excludeAuthors: string[] = []): Promise<InspirationQuote> => {
-  // Initialize the client with process.env.API_KEY directly as per guidelines.
+  // Initialize client with process.env.API_KEY as per guidelines
   const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
 
-  // Usamos um modelo mais capaz se disponível, ou o flash para rapidez
   const modelId = "gemini-2.5-flash";
   
-  // Lista de temas focados em Empoderamento e Força Feminina
   const themes = [
     "Autoestima e Amor Próprio Radical",
     "Coragem para Quebrar Padrões",
@@ -20,11 +18,9 @@ export const fetchDailyInspiration = async (excludeAuthors: string[] = []): Prom
     "Alegria de Viver e Ousadia"
   ];
 
-  // Seleciona um tema aleatório para esta requisição
   const randomTheme = themes[Math.floor(Math.random() * themes.length)];
   const randomSeed = Math.floor(Math.random() * 1000000);
 
-  // Cria string de exclusão se houver autoras para evitar
   const exclusionInstruction = excludeAuthors.length > 0
     ? `IMPORTANTE: Para garantir variedade, NÃO utilize as seguintes autoras (pois já foram usadas recentemente): ${excludeAuthors.join(", ")}.`
     : "";
@@ -91,7 +87,6 @@ export const fetchDailyInspiration = async (excludeAuthors: string[] = []): Prom
 
   } catch (error) {
     console.error("Error fetching quote from Gemini:", error);
-    // Fallback quote - Curta e Forte (caso de erro na API)
     return {
       quote: "Pés, para que os quero, se tenho asas para voar?",
       author: "Frida Kahlo",
@@ -103,6 +98,7 @@ export const fetchDailyInspiration = async (excludeAuthors: string[] = []): Prom
 
 export const fetchQuoteAudio = async (text: string): Promise<string | null> => {
   try {
+    // Initialize client with process.env.API_KEY as per guidelines
     const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
     
     const response = await ai.models.generateContent({
