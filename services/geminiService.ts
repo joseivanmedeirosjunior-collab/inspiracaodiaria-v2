@@ -3,7 +3,7 @@ import { InspirationQuote } from "../types";
 
 const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
 
-export const fetchDailyInspiration = async (): Promise<InspirationQuote> => {
+export const fetchDailyInspiration = async (excludeAuthors: string[] = []): Promise<InspirationQuote> => {
   // Usamos um modelo mais capaz se disponível, ou o flash para rapidez
   const modelId = "gemini-2.5-flash";
   
@@ -25,6 +25,11 @@ export const fetchDailyInspiration = async (): Promise<InspirationQuote> => {
   // Adiciona um fator aleatório para evitar cache semântico
   const randomSeed = Math.floor(Math.random() * 1000000);
 
+  // Cria string de exclusão se houver autoras para evitar
+  const exclusionInstruction = excludeAuthors.length > 0
+    ? `IMPORTANTE: Para garantir variedade, NÃO utilize as seguintes autoras (pois já foram usadas recentemente): ${excludeAuthors.join(", ")}.`
+    : "";
+
   const prompt = `
     Tarefa: Encontrar uma frase CURTA, PODEROSA e MOTIVACIONAL de uma mulher inspiradora.
     
@@ -32,6 +37,7 @@ export const fetchDailyInspiration = async (): Promise<InspirationQuote> => {
     O objetivo é empoderar mulheres, trazer coragem e elevar a autoestima.
     Foco Temático: ${randomTheme}
     Seed Aleatório: ${randomSeed}
+    ${exclusionInstruction}
 
     Requisitos RÍGIDOS:
     1. ESTILO: A frase deve ser CURTA e IMPACTANTE (máximo 1 ou 2 orações). Evite textos longos.
@@ -72,7 +78,7 @@ export const fetchDailyInspiration = async (): Promise<InspirationQuote> => {
           },
           required: ["quote", "author", "role", "country"],
         },
-        temperature: 1.1, // Alta temperatura para criatividade e variedade
+        temperature: 1.2, // Aumentei levemente para garantir mais variedade
       },
     });
 
@@ -86,7 +92,7 @@ export const fetchDailyInspiration = async (): Promise<InspirationQuote> => {
 
   } catch (error) {
     console.error("Error fetching quote from Gemini:", error);
-    // Fallback quote - Curta e Forte
+    // Fallback quote - Curta e Forte (caso de erro)
     return {
       quote: "Pés, para que os quero, se tenho asas para voar?",
       author: "Frida Kahlo",

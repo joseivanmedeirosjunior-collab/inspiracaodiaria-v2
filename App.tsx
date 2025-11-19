@@ -37,38 +37,38 @@ export default function App() {
     }).format(todayDate);
     
     setCurrentDate(formattedDate);
+    setLoading(true);
 
-    // 1. Tenta pegar frase APROVADA pelo admin
-    const adminApprovedQuote = getQuoteForDate(todayDate);
-    if (adminApprovedQuote) {
-      setQuoteData(adminApprovedQuote);
-      setLoading(false);
-      return;
-    }
-
-    // 2. Se não tiver admin approved, usa lógica de cache diário local
-    const todayKey = todayDate.toDateString();
-    const storedDataString = localStorage.getItem(LOCAL_STORAGE_KEY);
-
-    let shouldFetch = true;
-
-    if (storedDataString) {
-      try {
-        const storedData: DailyData = JSON.parse(storedDataString);
-        if (storedData.date === todayKey) {
-          setQuoteData(storedData.data);
-          setLoading(false);
-          shouldFetch = false;
-        }
-      } catch (e) {
-        console.error("Error parsing stored data", e);
+    try {
+      // 1. Tenta pegar frase APROVADA pelo admin no Supabase
+      const adminApprovedQuote = await getQuoteForDate(todayDate);
+      if (adminApprovedQuote) {
+        setQuoteData(adminApprovedQuote);
+        setLoading(false);
+        return;
       }
-    }
 
-    if (shouldFetch) {
-      setLoading(true);
-      try {
-        // Se não tem aprovada, gera aleatória
+      // 2. Se não tiver admin approved, usa lógica de cache diário local (fallback para usuário comum)
+      const todayKey = todayDate.toDateString();
+      const storedDataString = localStorage.getItem(LOCAL_STORAGE_KEY);
+
+      let shouldFetch = true;
+
+      if (storedDataString) {
+        try {
+          const storedData: DailyData = JSON.parse(storedDataString);
+          if (storedData.date === todayKey) {
+            setQuoteData(storedData.data);
+            setLoading(false);
+            shouldFetch = false;
+          }
+        } catch (e) {
+          console.error("Error parsing stored data", e);
+        }
+      }
+
+      if (shouldFetch) {
+        // Se não tem aprovada, gera aleatória (fallback padrão)
         const newData = await fetchDailyInspiration();
         setQuoteData(newData);
         
@@ -77,11 +77,11 @@ export default function App() {
           data: newData
         };
         localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(dataToStore));
-      } catch (error) {
-        console.error("Failed to fetch daily quote", error);
-      } finally {
-        setLoading(false);
       }
+    } catch (error) {
+      console.error("Failed to load daily quote", error);
+    } finally {
+      setLoading(false);
     }
   }, []);
 
