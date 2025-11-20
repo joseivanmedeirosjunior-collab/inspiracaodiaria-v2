@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Lock, Calendar, Check, RefreshCw, X, Loader2, ArrowLeft, Edit2, Save } from 'lucide-react';
+import { Lock, Calendar, Check, RefreshCw, X, Loader2, ArrowLeft, Edit2, Save, Trash2 } from 'lucide-react';
 import { fetchDailyInspiration } from '../services/geminiService';
 import { getQueue, updateQueueItem, formatDateKey } from '../services/queueService';
 import { QueueItem, InspirationQuote } from '../types';
@@ -139,7 +139,7 @@ export const AdminPanel: React.FC = () => {
   };
 
   const handleReject = async (date: Date) => {
-    if (window.confirm('Deseja remover esta aprovação?')) {
+    if (window.confirm('Deseja remover esta aprovação e voltar para rascunho?')) {
         const dateKey = formatDateKey(date);
         const currentItem = queue[dateKey];
         
@@ -151,19 +151,29 @@ export const AdminPanel: React.FC = () => {
                 ...prev,
                 [dateKey]: { ...prev[dateKey], status: 'draft' }
              }));
-          } else {
-             // Limpa
+          }
+        } catch (e) {
+          console.error(e);
+        }
+    }
+  };
+
+  const handleDelete = async (date: Date) => {
+    if (window.confirm('Tem certeza que deseja EXCLUIR esta frase? O dia ficará vazio.')) {
+        const dateKey = formatDateKey(date);
+        try {
+             // Limpa no banco
              await updateQueueItem(date, 'empty');
+             // Remove do estado local
              setQueue(prev => {
                const newQ = { ...prev };
                delete newQ[dateKey];
                return newQ;
              });
-             // Reativar autofill para preencher este buraco se quiser
-             autoFillRef.current = true;
-          }
+             // Reativar autofill se necessário, mas deixamos manual para o usuário decidir
         } catch (e) {
           console.error(e);
+          alert("Erro ao excluir.");
         }
     }
   };
@@ -431,6 +441,17 @@ export const AdminPanel: React.FC = () => {
                                 </button>
                             )}
 
+                            {/* Botão de Excluir (aparece se tiver dados) */}
+                            {hasDraft && (
+                                <button
+                                    onClick={() => handleDelete(date)}
+                                    className="flex items-center gap-2 px-3 py-2 rounded-lg text-red-400 hover:bg-red-50 hover:text-red-600 font-medium text-sm transition-colors"
+                                    title="Excluir frase"
+                                >
+                                    <Trash2 size={16} />
+                                </button>
+                            )}
+
                             {/* Ações de Aprovação */}
                             {hasDraft && !isApproved && (
                               <div className="ml-auto pl-4 border-l border-gray-100">
@@ -446,14 +467,14 @@ export const AdminPanel: React.FC = () => {
 
                             {/* Status Aprovado */}
                             {isApproved && (
-                              <div className="flex items-center justify-between w-full">
-                                <span className="flex items-center gap-2 text-green-600 font-bold text-sm bg-green-50 px-4 py-2 rounded-lg border border-green-100">
+                              <div className="flex items-center justify-between w-full md:w-auto ml-auto">
+                                <span className="flex items-center gap-2 text-green-600 font-bold text-sm bg-green-50 px-4 py-2 rounded-lg border border-green-100 mr-2">
                                   <Check size={16} />
                                   Publicação Agendada
                                 </span>
                                 <button
                                   onClick={() => handleReject(date)}
-                                  className="text-xs text-red-400 hover:text-red-600 hover:bg-red-50 px-3 py-1 rounded transition-colors"
+                                  className="text-xs text-orange-400 hover:text-orange-600 hover:bg-orange-50 px-3 py-1 rounded transition-colors"
                                 >
                                   Cancelar Aprovação
                                 </button>

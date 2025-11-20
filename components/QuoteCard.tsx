@@ -146,11 +146,11 @@ export const QuoteCard: React.FC<QuoteCardProps> = ({ data, loading }) => {
 
   if (loading) {
     return (
-      <div className="max-w-2xl w-full mx-4 bg-white rounded-[2rem] shadow-sm p-8 md:p-12 flex flex-col items-center animate-pulse border border-pink-100">
-        <div className="h-4 bg-pink-100 w-12 mb-6 rounded"></div>
-        <div className="h-6 bg-pink-100 w-3/4 mb-4 rounded"></div>
-        <div className="h-6 bg-pink-100 w-2/3 mb-8 rounded"></div>
-        <div className="h-4 bg-pink-100 w-1/3 rounded"></div>
+      <div className="max-w-2xl w-full mx-4 bg-white rounded-[2rem] shadow-sm p-8 md:p-12 flex flex-col items-center animate-pulse border border-juro-secondary/30">
+        <div className="h-4 bg-juro-secondary/20 w-12 mb-6 rounded"></div>
+        <div className="h-6 bg-juro-secondary/20 w-3/4 mb-4 rounded"></div>
+        <div className="h-6 bg-juro-secondary/20 w-2/3 mb-8 rounded"></div>
+        <div className="h-4 bg-juro-secondary/20 w-1/3 rounded"></div>
       </div>
     );
   }
@@ -175,7 +175,7 @@ export const QuoteCard: React.FC<QuoteCardProps> = ({ data, loading }) => {
   };
 
   return (
-    <div className="max-w-2xl w-full mx-4 bg-white rounded-[2.5rem] shadow-xl shadow-pink-100/50 border-2 border-white p-8 md:p-16 flex flex-col items-center text-center transform transition-all hover:scale-[1.01] duration-500">
+    <div className="max-w-2xl w-full mx-4 bg-white rounded-[2.5rem] shadow-xl shadow-juro-secondary/50 border-2 border-white p-8 md:p-16 flex flex-col items-center text-center transform transition-all hover:scale-[1.01] duration-500">
       
       <div className="mb-6 text-juro-primary opacity-80">
         <Quote size={40} fill="currentColor" className="rotate-180" />
@@ -205,7 +205,7 @@ export const QuoteCard: React.FC<QuoteCardProps> = ({ data, loading }) => {
               ? 'bg-red-50 text-red-500 border-red-100'
               : isLoadingAudio 
                 ? 'bg-gray-50 text-gray-400 border-gray-100 cursor-wait'
-                : 'bg-pink-50 text-juro-primary border-pink-100 hover:bg-pink-100'
+                : 'bg-juro-bg text-juro-primary border-juro-secondary hover:bg-juro-secondary/30'
           }`}
         >
           {isLoadingAudio ? (
