@@ -24,6 +24,8 @@ const getApiKey = (): string | undefined => {
 
 export const isOpenAIApiConfigured = (): boolean => !!getApiKey();
 
+const normalize = (text?: string | null): string => (text || "").toLowerCase().replace(/\s+/g, " ").trim();
+
 const isInspirationQuote = (value: any): value is InspirationQuote => {
   return (
     value &&
@@ -61,7 +63,28 @@ const parseInspirationContent = (content: unknown): InspirationQuote => {
   throw new Error("Formato de resposta inesperado da OpenAI");
 };
 
-export const fetchDailyInspiration = async (excludeAuthors: string[] = []): Promise<InspirationQuote> => {
+const isDuplicateQuote = (
+  quote: InspirationQuote,
+  excludeAuthors: string[],
+  excludeQuotes: string[]
+): boolean => {
+  const normalizedQuote = normalize(quote.quote);
+  const normalizedAuthor = normalize(quote.author);
+
+  const authorsSet = new Set(excludeAuthors.map(normalize).filter(Boolean));
+  const quotesSet = new Set(excludeQuotes.map(normalize).filter(Boolean));
+
+  return (
+    (!!normalizedQuote && quotesSet.has(normalizedQuote)) ||
+    (!!normalizedAuthor && authorsSet.has(normalizedAuthor))
+  );
+};
+
+export const fetchDailyInspiration = async (
+  excludeAuthors: string[] = [],
+  excludeQuotes: string[] = [],
+  attempt = 0
+): Promise<InspirationQuote> => {
   const apiKey = getApiKey();
 
   if (!apiKey) {
@@ -83,8 +106,19 @@ export const fetchDailyInspiration = async (excludeAuthors: string[] = []): Prom
   const randomTheme = themes[Math.floor(Math.random() * themes.length)];
   const randomSeed = Math.floor(Math.random() * 1000000);
 
-  const exclusionInstruction = excludeAuthors.length > 0
-    ? `Importante: não use estas autoras: ${excludeAuthors.join(", ")}.`
+  const uniqueAuthors = Array.from(new Set(excludeAuthors.map(normalize).filter(Boolean)));
+  const uniqueQuotes = Array.from(new Set(excludeQuotes.map(normalize).filter(Boolean)));
+
+  const maxItems = 15;
+  const authorsList = uniqueAuthors.slice(-maxItems).join(", ");
+  const quotesList = uniqueQuotes.slice(-maxItems).join(" | ");
+
+  const authorInstruction = authorsList
+    ? `Importante: não use estas autoras já usadas ou semelhantes: ${authorsList}.`
+    : "";
+
+  const quoteInstruction = quotesList
+    ? `Evite repetir frases iguais ou muito parecidas com estas: ${quotesList}.`
     : "";
 
   const payload = {
@@ -115,7 +149,7 @@ export const fetchDailyInspiration = async (excludeAuthors: string[] = []): Prom
       },
       {
         role: "user" as const,
-        content: `Tarefa: gerar uma frase curta e motivacional de uma mulher inspiradora.\nTema: ${randomTheme}\nSeed: ${randomSeed}\n${exclusionInstruction}\nRequisitos: 1) máximo de 2 orações; 2) autora mulher com país e papel; 3) português do Brasil; 4) responda apenas com JSON válido.`
+        content: `Tarefa: gerar uma frase curta e motivacional de uma mulher inspiradora.\nTema: ${randomTheme}\nSeed: ${randomSeed}\n${authorInstruction}\n${quoteInstruction}\nRequisitos: 1) máximo de 2 orações; 2) autora mulher com país e papel; 3) português do Brasil; 4) responda apenas com JSON válido.`
       }
     ]
   };
@@ -138,7 +172,16 @@ export const fetchDailyInspiration = async (excludeAuthors: string[] = []): Prom
     const data = await response.json();
     const content = data?.choices?.[0]?.message?.content;
 
-    return parseInspirationContent(content);
+    const quote = parseInspirationContent(content);
+
+    // Se a frase ou autora já foram usados, tenta uma nova rodada (até 3 vezes)
+    if (isDuplicateQuote(quote, excludeAuthors, excludeQuotes) && attempt < 2) {
+      const nextAuthors = [...excludeAuthors, quote.author];
+      const nextQuotes = [...excludeQuotes, quote.quote];
+      return fetchDailyInspiration(nextAuthors, nextQuotes, attempt + 1);
+    }
+
+    return quote;
   } catch (error) {
     console.error("Erro OpenAI (texto):", error);
 
@@ -169,7 +212,12 @@ export const fetchDailyInspiration = async (excludeAuthors: string[] = []): Prom
       },
     ];
 
-    return fallbackPool[Math.floor(Math.random() * fallbackPool.length)];
+    const filteredFallbacks = fallbackPool.filter(
+      (item) => !isDuplicateQuote(item, excludeAuthors, excludeQuotes)
+    );
+
+    const poolToUse = filteredFallbacks.length > 0 ? filteredFallbacks : fallbackPool;
+    return poolToUse[Math.floor(Math.random() * poolToUse.length)];
   }
 };
 

@@ -51,6 +51,12 @@ export const AdminPanel: React.FC = () => {
       .filter((author): author is string => !!author);
   };
 
+  const getUsedQuotes = (): string[] => {
+    return Object.values(queue)
+      .map((item: QueueItem) => item.data?.quote)
+      .filter((quote): quote is string => !!quote);
+  };
+
   // Efeito para preenchimento automático sequencial
   useEffect(() => {
     if (!isAuthenticated || !autoFillRef.current || loadingQueue) return;
@@ -114,9 +120,10 @@ export const AdminPanel: React.FC = () => {
     try {
       // 1. Coleta autoras já usadas para enviar como exclusão
       const usedAuthors = getUsedAuthors();
+      const usedQuotes = getUsedQuotes();
 
-      // 2. Gera com IA passando as exclusões
-      const newQuote = await fetchDailyInspiration(usedAuthors);
+      // 2. Gera com IA passando as exclusões para evitar repetição
+      const newQuote = await fetchDailyInspiration(usedAuthors, usedQuotes);
       
       // 3. Salva no Supabase
       await updateQueueItem(date, 'draft', newQuote);
