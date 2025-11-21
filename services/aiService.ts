@@ -4,8 +4,33 @@ const OPENAI_API_URL = "https://api.openai.com/v1";
 const DEFAULT_AUTHOR = "JURO";
 
 let quotaTemporarilyBlocked = false;
+let lastQuotaBlockAt: number | null = null;
+const QUOTA_COOLDOWN_MS = 10 * 60 * 1000; // 10 minutos
 
-export const isQuotaBlocked = () => quotaTemporarilyBlocked;
+export const isQuotaBlocked = () => {
+  refreshQuotaBlockIfExpired();
+  return quotaTemporarilyBlocked;
+};
+
+const refreshQuotaBlockIfExpired = () => {
+  if (quotaTemporarilyBlocked && lastQuotaBlockAt) {
+    const elapsed = Date.now() - lastQuotaBlockAt;
+    if (elapsed > QUOTA_COOLDOWN_MS) {
+      quotaTemporarilyBlocked = false;
+      lastQuotaBlockAt = null;
+    }
+  }
+};
+
+const markQuotaBlocked = () => {
+  quotaTemporarilyBlocked = true;
+  lastQuotaBlockAt = Date.now();
+};
+
+export const resetQuotaBlock = () => {
+  quotaTemporarilyBlocked = false;
+  lastQuotaBlockAt = null;
+};
 
 export class QuotaExceededError extends Error {
   fallback?: InspirationQuote;
@@ -149,6 +174,8 @@ export const fetchDailyInspiration = async (
 ): Promise<InspirationQuote> => {
   const apiKey = getApiKey();
 
+  refreshQuotaBlockIfExpired();
+
   if (!apiKey || quotaTemporarilyBlocked) {
     if (!apiKey) {
       console.warn("OpenAI API Key ausente. Retornando fallback local.");
@@ -244,7 +271,7 @@ export const fetchDailyInspiration = async (
         errorText.toLowerCase().includes("quota");
 
       if (isQuotaError) {
-        quotaTemporarilyBlocked = true;
+        markQuotaBlocked();
         throw new QuotaExceededError(
           `OpenAI retornou ${response.status}: ${errorText}`,
           fallback
@@ -271,7 +298,7 @@ export const fetchDailyInspiration = async (
     console.error("Erro OpenAI (texto):", error);
 
     if (error instanceof QuotaExceededError && error.fallback) {
-      quotaTemporarilyBlocked = true;
+      markQuotaBlocked();
       return error.fallback;
     }
 
@@ -281,6 +308,8 @@ export const fetchDailyInspiration = async (
 
 export const fetchQuoteAudio = async (text: string): Promise<string | null> => {
   const apiKey = getApiKey();
+  refreshQuotaBlockIfExpired();
+
   if (!apiKey || quotaTemporarilyBlocked) return null;
 
   try {

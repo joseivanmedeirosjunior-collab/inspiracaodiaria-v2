@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Lock, Calendar, Check, RefreshCw, X, Loader2, ArrowLeft, Edit2, Save, AlertTriangle } from 'lucide-react';
-import { fetchDailyInspiration, generateFallbackQuote, isDuplicateQuote, isOpenAIApiConfigured, isQuotaBlocked, QuotaExceededError } from '../services/aiService';
+import { fetchDailyInspiration, generateFallbackQuote, isDuplicateQuote, isOpenAIApiConfigured, isQuotaBlocked, QuotaExceededError, resetQuotaBlock } from '../services/aiService';
 import { DuplicateQuoteError, getAllUsedQuotes, getQueue, updateQueueItem, formatDateKey } from '../services/queueService';
 import { QueueItem, InspirationQuote } from '../types';
 
@@ -142,6 +142,11 @@ export const AdminPanel: React.FC = () => {
     sessionStorage.removeItem('juro_admin_auth');
     setPassword('');
     window.location.hash = '';
+  };
+
+  const handleRetryOpenAI = () => {
+    resetQuotaBlock();
+    setQuotaBlocked(false);
   };
 
   const handleGenerate = async (date: Date, isAuto = false) => {
@@ -411,6 +416,17 @@ export const AdminPanel: React.FC = () => {
             <p className="text-sm text-red-700">
               Gere uma nova chave no projeto com créditos ou mantenha o modo sem custo com as frases de fallback. Após atualizar a chave, publique novamente no Cloudflare Pages.
             </p>
+            <div className="mt-2 flex gap-2">
+              <button
+                onClick={handleRetryOpenAI}
+                className="px-3 py-2 text-sm rounded-lg bg-white text-red-700 border border-red-200 hover:border-red-300 hover:bg-red-100 transition-colors"
+              >
+                Tentar novamente agora
+              </button>
+              <span className="text-xs text-red-600 flex items-center">
+                Se a cota tiver sido liberada ou a chave trocada, clique acima para reativar o uso da OpenAI.
+              </span>
+            </div>
           </div>
         </div>
       )}

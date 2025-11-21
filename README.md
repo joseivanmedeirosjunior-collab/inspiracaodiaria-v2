@@ -40,6 +40,11 @@ _Dica rápida_: variáveis criadas em **Preview** não entram no build de **Prod
 - Opções rápidas: (1) gerar uma nova chave dentro do projeto que tem crédito e colocá-la em `VITE_OPENAI_API_KEY` + redeploy; (2) aceitar a frase local que o painel salva automaticamente quando detecta 429; (3) se quiser custo zero, trocar para um provedor com free tier e atualizar o serviço de IA.
 - Após o primeiro 429, o app entra em modo "fallback": para de chamar a OpenAI e usa apenas frases locais até você publicar novamente com uma chave válida. Isso evita spam de erros no console e mantém o preenchimento da agenda funcionando.
 
+#### Como reativar a OpenAI depois de liberar a cota
+- Existe um cooldown automático de 10 minutos: depois desse tempo, o app volta a tentar chamadas à OpenAI sozinho.
+- No painel Admin há o botão **"Tentar novamente agora"**, que remove o bloqueio imediatamente (útil após trocar a chave ou liberar billing) sem esperar o cooldown.
+- Se voltar a receber 429, o bloqueio é reativado e o app segue usando frases locais para não parar a operação.
+
 ## Evitando frases repetidas
 - Antes de gerar uma nova frase, o painel Admin agora lê todas as citações existentes no Supabase (agendadas, pendentes ou aprovadas) e envia essa lista ampliada (até 200 itens) como exclusão para a IA.
 - O modelo foi ajustado para criar frases **originais** assinadas pela autora fixa **JURO**, reduzindo colisões de autoras conhecidas.
