@@ -3,16 +3,33 @@ import { InspirationQuote } from "../types";
 
 // Helper para obter a chave de API de forma segura
 const getApiKey = (): string | undefined => {
-  // Tenta ler do Vite (Cloudflare)
-  if (typeof import.meta !== 'undefined' && import.meta.env && import.meta.env.VITE_API_KEY) {
+  // 1) Build-time via Vite (Cloudflare Pages)
+  if (typeof import.meta !== 'undefined' && import.meta.env?.VITE_API_KEY) {
     return import.meta.env.VITE_API_KEY;
   }
-  // Tenta ler do ambiente local (Legacy)
-  if (typeof process !== 'undefined' && process.env && process.env.API_KEY) {
+
+  // 2) Fallback para builds que expõem VITE_API_KEY em process.env (alguns runners)
+  if (typeof process !== 'undefined' && process.env?.VITE_API_KEY) {
+    return process.env.VITE_API_KEY;
+  }
+
+  // 3) Fallback para builds antigos/local (chave sem prefixo VITE)
+  if (typeof process !== 'undefined' && process.env?.API_KEY) {
     return process.env.API_KEY;
   }
+
+  // 4) Fallback de emergência: meta tag no index.html (preenchida no build do Pages)
+  if (typeof document !== 'undefined') {
+    const meta = document.querySelector('meta[name="vite-api-key"]');
+    const content = meta?.getAttribute('content');
+    if (content) return content;
+  }
+
   return undefined;
 };
+
+// Exposto para o painel Admin conseguir exibir um aviso claro quando a chave faltar
+export const isGeminiApiConfigured = (): boolean => !!getApiKey();
 
 export const fetchDailyInspiration = async (excludeAuthors: string[] = []): Promise<InspirationQuote> => {
   const apiKey = getApiKey();
