@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Lock, Calendar, Check, RefreshCw, X, Loader2, ArrowLeft, Edit2, Save, AlertTriangle } from 'lucide-react';
-import { fetchDailyInspiration, isDuplicateQuote, isOpenAIApiConfigured } from '../services/aiService';
+import { fetchDailyInspiration, generateFallbackQuote, isDuplicateQuote, isOpenAIApiConfigured, QuotaExceededError } from '../services/aiService';
 import { DuplicateQuoteError, getAllUsedQuotes, getQueue, updateQueueItem, formatDateKey } from '../services/queueService';
 import { QueueItem, InspirationQuote } from '../types';
 
@@ -164,25 +164,46 @@ export const AdminPanel: React.FC = () => {
       let storedQuote: InspirationQuote | null = null;
 
       while (attempt < maxAttempts && !storedQuote) {
-        const candidate = await fetchDailyInspiration(excludeAuthors, excludeQuotes);
-
-        const isDuplicate = isDuplicateQuote(candidate, excludeAuthors, excludeQuotes);
-        if (isDuplicate) {
-          excludeAuthors.push(candidate.author);
-          excludeQuotes.push(candidate.quote);
-          attempt += 1;
-          continue;
-        }
-
         try {
-          await updateQueueItem(date, 'draft', candidate);
-          storedQuote = candidate;
-        } catch (error) {
-          if (error instanceof DuplicateQuoteError) {
+          const candidate = await fetchDailyInspiration(excludeAuthors, excludeQuotes);
+
+          const isDuplicate = isDuplicateQuote(candidate, excludeAuthors, excludeQuotes);
+          if (isDuplicate) {
+            excludeAuthors.push(candidate.author);
             excludeQuotes.push(candidate.quote);
             attempt += 1;
             continue;
           }
+
+          try {
+            await updateQueueItem(date, 'draft', candidate);
+            storedQuote = candidate;
+          } catch (error) {
+            if (error instanceof DuplicateQuoteError) {
+              excludeQuotes.push(candidate.quote);
+              attempt += 1;
+              continue;
+            }
+            throw error;
+          }
+        } catch (error) {
+          if (error instanceof QuotaExceededError) {
+            const fallbackQuote = error.fallback || generateFallbackQuote(excludeAuthors, excludeQuotes);
+            await updateQueueItem(date, 'draft', fallbackQuote);
+            storedQuote = fallbackQuote;
+
+            if (!isAuto) {
+              alert(
+                'A OpenAI recusou a requisição por falta de quota/crédito ou chave do projeto errado. Opções:\n\n' +
+                '1) Usei uma frase local agora para não travar.\n' +
+                '2) Gere uma nova chave no projeto com crédito ativo e atualize a VITE_OPENAI_API_KEY.\n' +
+                '3) Se quiser custo zero, mantenha apenas as frases locais ou troque para um provedor com free tier.'
+              );
+            }
+
+            break;
+          }
+
           throw error;
         }
       }

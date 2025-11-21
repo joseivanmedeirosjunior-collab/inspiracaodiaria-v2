@@ -3,6 +3,16 @@ import { InspirationQuote } from "../types";
 const OPENAI_API_URL = "https://api.openai.com/v1";
 const DEFAULT_AUTHOR = "JURO";
 
+export class QuotaExceededError extends Error {
+  fallback?: InspirationQuote;
+
+  constructor(message: string, fallback?: InspirationQuote) {
+    super(message);
+    this.name = "QuotaExceededError";
+    this.fallback = fallback;
+  }
+}
+
 const isPlaceholder = (value: string | undefined): boolean => {
   if (!value) return true;
   const normalized = value.trim();
@@ -87,6 +97,45 @@ export const isDuplicateQuote = (
     (!!normalizedQuote && quotesSet.has(normalizedQuote)) ||
     (!authorIsDefault && !!normalizedAuthor && authorsSet.has(normalizedAuthor))
   );
+};
+
+export const generateFallbackQuote = (
+  excludeAuthors: string[] = [],
+  excludeQuotes: string[] = []
+): InspirationQuote => {
+  const fallbackPool: InspirationQuote[] = [
+    {
+      quote: "Pés, para que os quero, se tenho asas para voar?",
+      author: "Frida Kahlo",
+      role: "Pintora",
+      country: "México",
+    },
+    {
+      quote: "Eu sou feita de cicatrizes, mas caminho com elegância.",
+      author: "Conceição Evaristo",
+      role: "Escritora",
+      country: "Brasil",
+    },
+    {
+      quote: "Ninguém pode fazer você se sentir inferior sem o seu consentimento.",
+      author: "Eleanor Roosevelt",
+      role: "Diplomata",
+      country: "Estados Unidos",
+    },
+    {
+      quote: "A liberdade é uma luta constante, mas a vitória é doce.",
+      author: "Angela Davis",
+      role: "Filósofa",
+      country: "Estados Unidos",
+    },
+  ];
+
+  const filteredFallbacks = fallbackPool.filter(
+    (item) => !isDuplicateQuote(item, excludeAuthors, excludeQuotes)
+  );
+
+  const poolToUse = filteredFallbacks.length > 0 ? filteredFallbacks : fallbackPool;
+  return poolToUse[Math.floor(Math.random() * poolToUse.length)];
 };
 
 export const fetchDailyInspiration = async (
@@ -178,6 +227,20 @@ export const fetchDailyInspiration = async (
 
     if (!response.ok) {
       const errorText = await response.text();
+      const fallback = generateFallbackQuote(excludeAuthors, excludeQuotes);
+      const isQuotaError =
+        response.status === 429 ||
+        errorText.toLowerCase().includes("insufficient_quota") ||
+        errorText.toLowerCase().includes("billing") ||
+        errorText.toLowerCase().includes("quota");
+
+      if (isQuotaError) {
+        throw new QuotaExceededError(
+          `OpenAI retornou ${response.status}: ${errorText}`,
+          fallback
+        );
+      }
+
       throw new Error(`OpenAI retornou ${response.status}: ${errorText}`);
     }
 
@@ -197,39 +260,11 @@ export const fetchDailyInspiration = async (
   } catch (error) {
     console.error("Erro OpenAI (texto):", error);
 
-    const fallbackPool: InspirationQuote[] = [
-      {
-        quote: "Pés, para que os quero, se tenho asas para voar?",
-        author: "Frida Kahlo",
-        role: "Pintora",
-        country: "México",
-      },
-      {
-        quote: "Eu sou feita de cicatrizes, mas caminho com elegância.",
-        author: "Conceição Evaristo",
-        role: "Escritora",
-        country: "Brasil",
-      },
-      {
-        quote: "Ninguém pode fazer você se sentir inferior sem o seu consentimento.",
-        author: "Eleanor Roosevelt",
-        role: "Diplomata",
-        country: "Estados Unidos",
-      },
-      {
-        quote: "A liberdade é uma luta constante, mas a vitória é doce.",
-        author: "Angela Davis",
-        role: "Filósofa",
-        country: "Estados Unidos",
-      },
-    ];
+    if (error instanceof QuotaExceededError && error.fallback) {
+      return error.fallback;
+    }
 
-    const filteredFallbacks = fallbackPool.filter(
-      (item) => !isDuplicateQuote(item, excludeAuthors, excludeQuotes)
-    );
-
-    const poolToUse = filteredFallbacks.length > 0 ? filteredFallbacks : fallbackPool;
-    return poolToUse[Math.floor(Math.random() * poolToUse.length)];
+    return generateFallbackQuote(excludeAuthors, excludeQuotes);
   }
 };
 
