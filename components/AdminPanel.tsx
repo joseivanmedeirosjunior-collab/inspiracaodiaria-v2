@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Lock, Calendar, Check, RefreshCw, X, Loader2, ArrowLeft, Edit2, Save, AlertTriangle } from 'lucide-react';
-import { fetchDailyInspiration, isGeminiApiConfigured } from '../services/geminiService';
+import { fetchDailyInspiration, isOpenAIApiConfigured } from '../services/aiService';
 import { getQueue, updateQueueItem, formatDateKey } from '../services/queueService';
 import { QueueItem, InspirationQuote } from '../types';
 
@@ -16,7 +16,7 @@ export const AdminPanel: React.FC = () => {
   const [editForm, setEditForm] = useState<InspirationQuote>({ quote: '', author: '', role: '', country: '' });
 
   // Status da API para feedback preventivo
-  const [hasGeminiKey, setHasGeminiKey] = useState<boolean>(true);
+  const [hasOpenAIKey, setHasOpenAIKey] = useState<boolean>(true);
 
   // Referência para controlar o loop de geração automática
   const autoFillRef = useRef(false);
@@ -38,7 +38,7 @@ export const AdminPanel: React.FC = () => {
         setQueue(storedQueue);
         setLoadingQueue(false);
         autoFillRef.current = true; // Ativa o gatilho para preenchimento automático após carregar dados
-        setHasGeminiKey(isGeminiApiConfigured());
+        setHasOpenAIKey(isOpenAIApiConfigured());
       };
       fetchQueue();
     }
@@ -101,10 +101,10 @@ export const AdminPanel: React.FC = () => {
   const handleGenerate = async (date: Date, isAuto = false) => {
     const dateKey = formatDateKey(date);
 
-    if (!isGeminiApiConfigured()) {
-      setHasGeminiKey(false);
+    if (!isOpenAIApiConfigured()) {
+      setHasOpenAIKey(false);
       if (!isAuto) {
-        alert('Configure a variável VITE_API_KEY no Cloudflare Pages ou no .env local para gerar novas frases.');
+        alert('Configure a variável VITE_OPENAI_API_KEY no Cloudflare Pages ou no .env local para gerar novas frases.');
       }
       return;
     }
@@ -271,14 +271,14 @@ export const AdminPanel: React.FC = () => {
 
   return (
       <div className="w-full max-w-5xl mx-auto px-4 py-8 pb-24">
-      {!hasGeminiKey && (
+      {!hasOpenAIKey && (
         <div className="mb-6 flex items-start gap-3 rounded-2xl border border-amber-200 bg-amber-50 p-4 text-amber-800">
           <AlertTriangle size={18} className="mt-1" />
           <div>
-            <p className="font-semibold">Configure a chave da Gemini API para gerar frases automaticamente.</p>
+            <p className="font-semibold">Configure a chave da OpenAI para gerar frases automaticamente.</p>
             <p className="text-sm text-amber-700">
-              Defina <strong>VITE_API_KEY</strong> nas variáveis do projeto no Cloudflare Pages (ou use um .env local) e publique
-              novamente. Enquanto isso, use "Escrever Manualmente" ou edite um rascunho existente.
+              Defina <strong>VITE_OPENAI_API_KEY</strong> nas variáveis do projeto no Cloudflare Pages (ou use um .env local) e
+              publique novamente. Enquanto isso, use "Escrever Manualmente" ou edite um rascunho existente.
             </p>
           </div>
         </div>

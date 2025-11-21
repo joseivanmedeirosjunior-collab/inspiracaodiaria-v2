@@ -3,7 +3,7 @@ import { Header } from '../components/Header';
 import { Footer } from '../components/Footer';
 import { QuoteCard } from '../components/QuoteCard';
 import { AdminPanel } from '../components/AdminPanel';
-import { fetchDailyInspiration } from '../services/geminiService';
+import { fetchDailyInspiration } from '../services/aiService';
 import { getQuoteForDate } from '../services/queueService';
 import { InspirationQuote, DailyData } from '../types';
 import { Sparkles, AlertTriangle } from 'lucide-react';
@@ -142,7 +142,7 @@ export default function App() {
                 <h3 className="text-xl font-bold text-red-600 mb-2">Ops! Algo deu errado.</h3>
                 <p className="text-gray-600 mb-4">{error}</p>
                 <p className="text-sm text-gray-400">
-                  Se você é o administrador, verifique se a <strong>VITE_API_KEY</strong> está configurada corretamente no Cloudflare.
+                  Se você é o administrador, verifique se a <strong>VITE_OPENAI_API_KEY</strong> está configurada corretamente no Cloudflare.
                 </p>
                 <button 
                   onClick={() => window.location.reload()}

@@ -15,7 +15,7 @@ View your app in AI Studio: https://ai.studio/apps/drive/15c-DOz5jh9HyHFkRvPVLC3
 
 1. Install dependencies:
    `npm install`
-2. Set the `GEMINI_API_KEY` in [.env.local](.env.local) to your Gemini API key
+2. Set the `VITE_OPENAI_API_KEY` in [.env.local](.env.local) to your OpenAI API key
 3. Run the app:
    `npm run dev`
 
@@ -26,11 +26,11 @@ View your app in AI Studio: https://ai.studio/apps/drive/15c-DOz5jh9HyHFkRvPVLC3
 - O trecho `2 moderate severity vulnerabilities` é um relatório do `npm audit`; use `npm audit` ou `npm audit fix --force` se quiser revisar/atualizar dependências.
 - Os erros `Cannot find module './components/Header'` etc. ocorreram porque o `src/App.tsx` importava componentes e serviços em caminhos relativos errados; foram corrigidos para apontar para `../components`, `../services` e `../types`, e o build (`npm run build`) agora completa com sucesso.
 
-## Usando a VITE_API_KEY no Cloudflare Pages (passo a passo simples)
-O app só gera frases se a chave de API for "queimada" no código durante o build. Isso acontece automaticamente **quando o Pages recebe a variável `VITE_API_KEY` no momento do build**. Se ela não chegar nessa hora, o botão de gerar fica bloqueado. Para garantir que funcione:
+## Usando a VITE_OPENAI_API_KEY no Cloudflare Pages (passo a passo simples)
+O app agora usa a API do ChatGPT (OpenAI) para gerar e narrar as frases. A chave precisa ser "queimada" no código durante o build. Para garantir isso:
 
-1) Abra **Cloudflare Pages → seu projeto → Settings → Environment Variables**. Em **Production**, crie (ou confirme) o item **Nome: `VITE_API_KEY` / Tipo: Secret / Valor: sua chave**. Se já existe, apenas salve/feche.
-2) Clique em **Deployments → Redeploy** (escolha "Redeploy latest"). Esse rebuild é o que injeta a variável no bundle que vai para o navegador.
-3) Depois do deploy concluir, abra o app. Se algo falhar, abra o Console do navegador: se aparecer `Gemini Service - API Key detectada: false`, o build ainda não recebeu a variável (volte e repita o passo 1 + redeploy).
+1) Abra **Cloudflare Pages → seu projeto → Settings → Environment Variables**. Em **Production**, crie (ou confirme) o item **Nome: `VITE_OPENAI_API_KEY` / Tipo: Secret / Valor: sua chave OpenAI**. Se preferir, mantenha também `VITE_API_KEY` como alias.
+2) Clique em **Deployments → Redeploy** ("Redeploy latest") para forçar um build novo já com a chave.
+3) Depois do deploy, teste o painel Admin. Se o botão "Gerar" não responder, abra o console do navegador: se aparecer `OpenAI API Key não encontrada`, a variável não chegou ao build (repita os passos 1 e 2).
 
 _Dica rápida_: variáveis criadas em **Preview** não entram no build de **Production**. Verifique se está na aba certa.

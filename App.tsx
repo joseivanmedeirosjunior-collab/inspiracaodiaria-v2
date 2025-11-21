@@ -3,7 +3,7 @@ import { Header } from './components/Header';
 import { Footer } from './components/Footer';
 import { QuoteCard } from './components/QuoteCard';
 import { AdminPanel } from './components/AdminPanel';
-import { fetchDailyInspiration } from './services/geminiService';
+import { fetchDailyInspiration } from './services/aiService';
 import { getQuoteForDate } from './services/queueService';
 import { InspirationQuote, DailyData } from './types';
 import { Sparkles } from 'lucide-react';

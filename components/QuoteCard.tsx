@@ -1,43 +1,13 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { Share2, Quote, Copy, Check, Volume2, StopCircle, Loader2, Heart, Zap, Star } from 'lucide-react';
 import { InspirationQuote, ReactionCounts, ReactionType } from '../types';
-import { fetchQuoteAudio } from '../services/geminiService';
+import { fetchQuoteAudio } from '../services/aiService';
 import { registerReaction, getReactions, formatDateKey } from '../services/queueService';
 
 interface QuoteCardProps {
   data: InspirationQuote | null;
   loading: boolean;
   date: Date;
-}
-
-// Funções auxiliares para decodificação de áudio PCM do Gemini
-function decode(base64: string) {
-  const binaryString = atob(base64);
-  const len = binaryString.length;
-  const bytes = new Uint8Array(len);
-  for (let i = 0; i < len; i++) {
-    bytes[i] = binaryString.charCodeAt(i);
-  }
-  return bytes;
-}
-
-async function decodeAudioData(
-  data: Uint8Array,
-  ctx: AudioContext,
-  sampleRate: number,
-  numChannels: number,
-): Promise<AudioBuffer> {
-  const dataInt16 = new Int16Array(data.buffer);
-  const frameCount = dataInt16.length / numChannels;
-  const buffer = ctx.createBuffer(numChannels, frameCount, sampleRate);
-
-  for (let channel = 0; channel < numChannels; channel++) {
-    const channelData = buffer.getChannelData(channel);
-    for (let i = 0; i < frameCount; i++) {
-      channelData[i] = dataInt16[i * numChannels + channel] / 32768.0;
-    }
-  }
-  return buffer;
 }
 
 export const QuoteCard: React.FC<QuoteCardProps> = ({ data, loading, date }) => {
@@ -54,8 +24,7 @@ export const QuoteCard: React.FC<QuoteCardProps> = ({ data, loading, date }) => 
   const [isVoting, setIsVoting] = useState(false);
 
   // Refs de Áudio
-  const audioContextRef = useRef<AudioContext | null>(null);
-  const sourceNodeRef = useRef<AudioBufferSourceNode | null>(null);
+  const audioRef = useRef<HTMLAudioElement | null>(null);
 
   // Carregar reações iniciais
   useEffect(() => {
@@ -81,56 +50,36 @@ export const QuoteCard: React.FC<QuoteCardProps> = ({ data, loading, date }) => 
   useEffect(() => {
     return () => {
       stopAudio();
-      if (audioContextRef.current?.state !== 'closed') {
-        audioContextRef.current?.close();
+      if (audioCache) {
+        URL.revokeObjectURL(audioCache);
       }
     };
-  }, [data]);
+  }, [data, audioCache]);
 
   const stopAudio = () => {
-    if (sourceNodeRef.current) {
+    if (audioRef.current) {
       try {
-        sourceNodeRef.current.stop();
+        audioRef.current.pause();
+        audioRef.current.currentTime = 0;
       } catch (e) {
-        // Ignorar erro se já estiver parado
+        // ignore
       }
-      sourceNodeRef.current = null;
     }
     setIsSpeaking(false);
   };
 
-  const playAudio = async (base64Data: string) => {
+  const playAudio = async (audioUrl: string) => {
     try {
-      if (!audioContextRef.current || audioContextRef.current.state === 'closed') {
-        audioContextRef.current = new (window.AudioContext || (window as any).webkitAudioContext)({ sampleRate: 24000 });
+      if (!audioRef.current || audioRef.current.src !== audioUrl) {
+        if (audioRef.current) {
+          audioRef.current.pause();
+        }
+        audioRef.current = new Audio(audioUrl);
       }
 
-      if (audioContextRef.current.state === 'suspended') {
-        await audioContextRef.current.resume();
-      }
-
-      const audioBuffer = await decodeAudioData(
-        decode(base64Data),
-        audioContextRef.current,
-        24000,
-        1 
-      );
-
-      stopAudio();
-
-      const source = audioContextRef.current.createBufferSource();
-      source.buffer = audioBuffer;
-      source.connect(audioContextRef.current.destination);
-      
-      source.onended = () => {
-        setIsSpeaking(false);
-        sourceNodeRef.current = null;
-      };
-
-      sourceNodeRef.current = source;
-      source.start();
+      audioRef.current.onended = () => setIsSpeaking(false);
+      await audioRef.current.play();
       setIsSpeaking(true);
-
     } catch (error) {
       console.error("Erro ao reproduzir áudio:", error);
       setIsSpeaking(false);
@@ -153,11 +102,14 @@ export const QuoteCard: React.FC<QuoteCardProps> = ({ data, loading, date }) => 
     setIsLoadingAudio(true);
     try {
       const textToSpeak = `${data.quote}. Frase de ${data.author}.`;
-      const base64 = await fetchQuoteAudio(textToSpeak);
-      
-      if (base64) {
-        setAudioCache(base64);
-        await playAudio(base64);
+      const audioUrl = await fetchQuoteAudio(textToSpeak);
+
+      if (audioUrl) {
+        setAudioCache((prev) => {
+          if (prev && prev !== audioUrl) URL.revokeObjectURL(prev);
+          return audioUrl;
+        });
+        await playAudio(audioUrl);
       }
     } catch (error) {
       console.error("Falha ao obter áudio", error);
