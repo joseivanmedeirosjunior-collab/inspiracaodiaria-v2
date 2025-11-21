@@ -1,6 +1,10 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
 :root {
   font-family: 'Inter', system-ui, sans-serif;
-  background-color: #FFF5F8; /* Fallback color */
+  background-color: #FFF5F8;
 }
 
 /* Custom Animations */
@@ -8,12 +12,21 @@
   animation: fadeIn 0.8s ease-out forwards;
 }
 
+.animate-bounce-short {
+  animation: bounceShort 0.5s;
+}
+
 @keyframes fadeIn {
   from { opacity: 0; transform: translateY(20px); }
   to { opacity: 1; transform: translateY(0); }
 }
 
-/* Utility classes that might be missed by CDN JIT */
+@keyframes bounceShort {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-25%); }
+}
+
+/* Utility classes */
 .cursor-wait {
   cursor: wait;
 }

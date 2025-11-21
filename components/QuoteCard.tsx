@@ -1,11 +1,13 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { Share2, Quote, Copy, Check, Volume2, StopCircle, Loader2 } from 'lucide-react';
-import { InspirationQuote } from '../types';
+import { Share2, Quote, Copy, Check, Volume2, StopCircle, Loader2, Heart, Zap, Star } from 'lucide-react';
+import { InspirationQuote, ReactionCounts, ReactionType } from '../types';
 import { fetchQuoteAudio } from '../services/geminiService';
+import { registerReaction, getReactions, formatDateKey } from '../services/queueService';
 
 interface QuoteCardProps {
   data: InspirationQuote | null;
   loading: boolean;
+  date: Date;
 }
 
 // Funções auxiliares para decodificação de áudio PCM do Gemini
@@ -38,7 +40,7 @@ async function decodeAudioData(
   return buffer;
 }
 
-export const QuoteCard: React.FC<QuoteCardProps> = ({ data, loading }) => {
+export const QuoteCard: React.FC<QuoteCardProps> = ({ data, loading, date }) => {
   const [copied, setCopied] = useState(false);
   
   // Estados de Áudio
@@ -46,9 +48,34 @@ export const QuoteCard: React.FC<QuoteCardProps> = ({ data, loading }) => {
   const [isLoadingAudio, setIsLoadingAudio] = useState(false);
   const [audioCache, setAudioCache] = useState<string | null>(null);
   
+  // Estados de Reação
+  const [reactions, setReactions] = useState<ReactionCounts>({ love: 0, power: 0, sad: 0 });
+  const [userVotes, setUserVotes] = useState<Record<string, boolean>>({});
+  const [isVoting, setIsVoting] = useState(false);
+
   // Refs de Áudio
   const audioContextRef = useRef<AudioContext | null>(null);
   const sourceNodeRef = useRef<AudioBufferSourceNode | null>(null);
+
+  // Carregar reações iniciais
+  useEffect(() => {
+    if (data) {
+        const loadReactions = async () => {
+            const counts = await getReactions(date);
+            setReactions(counts);
+        };
+        loadReactions();
+
+        // Carregar votos locais do usuário para este dia
+        const dateKey = formatDateKey(date);
+        const savedVotes = localStorage.getItem(`juro_votes_${dateKey}`);
+        if (savedVotes) {
+            setUserVotes(JSON.parse(savedVotes));
+        } else {
+            setUserVotes({});
+        }
+    }
+  }, [data, date]);
 
   // Limpar áudio ao desmontar ou mudar a frase
   useEffect(() => {
@@ -58,7 +85,7 @@ export const QuoteCard: React.FC<QuoteCardProps> = ({ data, loading }) => {
         audioContextRef.current?.close();
       }
     };
-  }, [data]); // Reseta se os dados mudarem
+  }, [data]);
 
   const stopAudio = () => {
     if (sourceNodeRef.current) {
@@ -74,7 +101,6 @@ export const QuoteCard: React.FC<QuoteCardProps> = ({ data, loading }) => {
 
   const playAudio = async (base64Data: string) => {
     try {
-      // Inicializar AudioContext se necessário (necessário interação do usuário primeiro)
       if (!audioContextRef.current || audioContextRef.current.state === 'closed') {
         audioContextRef.current = new (window.AudioContext || (window as any).webkitAudioContext)({ sampleRate: 24000 });
       }
@@ -86,11 +112,10 @@ export const QuoteCard: React.FC<QuoteCardProps> = ({ data, loading }) => {
       const audioBuffer = await decodeAudioData(
         decode(base64Data),
         audioContextRef.current,
-        24000, // Taxa de amostragem padrão do modelo Gemini TTS
-        1 // Mono
+        24000,
+        1 
       );
 
-      // Parar áudio anterior se houver
       stopAudio();
 
       const source = audioContextRef.current.createBufferSource();
@@ -115,19 +140,16 @@ export const QuoteCard: React.FC<QuoteCardProps> = ({ data, loading }) => {
   const handleSpeak = async () => {
     if (!data) return;
 
-    // Se já estiver falando, parar
     if (isSpeaking) {
       stopAudio();
       return;
     }
 
-    // Se já tivermos o áudio em cache, tocar
     if (audioCache) {
       playAudio(audioCache);
       return;
     }
 
-    // Caso contrário, buscar da API
     setIsLoadingAudio(true);
     try {
       const textToSpeak = `${data.quote}. Frase de ${data.author}.`;
@@ -141,6 +163,49 @@ export const QuoteCard: React.FC<QuoteCardProps> = ({ data, loading }) => {
       console.error("Falha ao obter áudio", error);
     } finally {
       setIsLoadingAudio(false);
+    }
+  };
+
+  const handleReaction = async (newType: ReactionType) => {
+    if (isVoting) return; 
+
+    // 1. Identificar se já existe um voto anterior
+    const previousVote = Object.keys(userVotes).find(key => userVotes[key]) as ReactionType | undefined;
+
+    // Se o usuário clicou no mesmo que já estava, não fazemos nada (ou poderíamos desmarcar/toggle off)
+    // Seguindo a lógica de "mudar de ideia", apenas ignoramos o clique repetido para evitar recalculo
+    if (previousVote === newType) return;
+
+    setIsVoting(true);
+
+    // 2. Atualização Otimista (UI)
+    const updatedReactions = { ...reactions };
+    
+    // Se tinha voto antes, remove 1
+    if (previousVote) {
+        updatedReactions[previousVote] = Math.max(0, updatedReactions[previousVote] - 1);
+    }
+    // Adiciona 1 no novo voto
+    updatedReactions[newType] = updatedReactions[newType] + 1;
+    
+    setReactions(updatedReactions);
+    
+    // 3. Atualizar estado local de votos do usuário (Garante exclusividade)
+    const newUserVotes: Record<string, boolean> = { [newType]: true }; // Apenas o novo é true
+    setUserVotes(newUserVotes);
+    
+    // Salvar no localStorage
+    const dateKey = formatDateKey(date);
+    localStorage.setItem(`juro_votes_${dateKey}`, JSON.stringify(newUserVotes));
+
+    // 4. Enviar para o servidor (backend)
+    try {
+       await registerReaction(date, newType, previousVote);
+    } catch (e) {
+       console.error("Falha ao salvar reação", e);
+       // Em caso de erro real, poderíamos reverter o estado, mas para UX simples mantemos otimista
+    } finally {
+        setIsVoting(false);
     }
   };
 
@@ -175,7 +240,7 @@ export const QuoteCard: React.FC<QuoteCardProps> = ({ data, loading }) => {
   };
 
   return (
-    <div className="max-w-2xl w-full mx-4 bg-white rounded-[2.5rem] shadow-xl shadow-juro-secondary/50 border-2 border-white p-8 md:p-16 flex flex-col items-center text-center transform transition-all hover:scale-[1.01] duration-500">
+    <div className="max-w-2xl w-full mx-4 bg-white rounded-[2.5rem] shadow-xl shadow-juro-secondary/50 border-2 border-white p-8 md:p-16 flex flex-col items-center text-center transform transition-all hover:scale-[1.01] duration-500 relative">
       
       <div className="mb-6 text-juro-primary opacity-80">
         <Quote size={40} fill="currentColor" className="rotate-180" />
@@ -187,13 +252,52 @@ export const QuoteCard: React.FC<QuoteCardProps> = ({ data, loading }) => {
 
       <div className="w-16 h-1.5 bg-juro-primary rounded-full mb-8 opacity-20"></div>
 
-      <div className="flex flex-col items-center mb-12">
+      <div className="flex flex-col items-center mb-10">
         <h2 className="font-sans font-bold text-xl text-juro-primary tracking-wide">
           — {data.author}
         </h2>
         <p className="font-sans text-sm text-juro-text opacity-60 mt-2 font-medium">
           {data.role} • {data.country}
         </p>
+      </div>
+
+      {/* Área de Reações */}
+      <div className="flex items-center justify-center gap-4 md:gap-6 mb-10 w-full">
+        {/* Amei */}
+        <button 
+            onClick={() => handleReaction('love')}
+            className={`flex flex-col items-center gap-1 group transition-all active:scale-90 ${userVotes.love ? 'opacity-100' : 'opacity-60 hover:opacity-100'}`}
+        >
+            <div className={`p-3 rounded-full transition-all shadow-sm ${userVotes.love ? 'bg-red-100 text-red-500 scale-110 shadow-red-200' : 'bg-gray-50 text-gray-400 hover:bg-red-50 hover:text-red-400'}`}>
+                <Heart size={24} fill={userVotes.love ? "currentColor" : "none"} className={userVotes.love ? "animate-bounce-short" : ""} />
+            </div>
+            <span className="text-xs font-bold text-juro-text/70">{reactions.love}</span>
+            <span className="text-[10px] uppercase tracking-wide text-gray-400 hidden md:block">Amei</span>
+        </button>
+
+        {/* Poderosa */}
+        <button 
+            onClick={() => handleReaction('power')}
+            className={`flex flex-col items-center gap-1 group transition-all active:scale-90 ${userVotes.power ? 'opacity-100' : 'opacity-60 hover:opacity-100'}`}
+        >
+            <div className={`p-3 rounded-full transition-all shadow-sm ${userVotes.power ? 'bg-orange-100 text-orange-500 scale-110 shadow-orange-200' : 'bg-gray-50 text-gray-400 hover:bg-orange-50 hover:text-orange-400'}`}>
+                <Zap size={24} fill={userVotes.power ? "currentColor" : "none"} />
+            </div>
+            <span className="text-xs font-bold text-juro-text/70">{reactions.power}</span>
+            <span className="text-[10px] uppercase tracking-wide text-gray-400 hidden md:block">Poderosa</span>
+        </button>
+
+        {/* Tocante */}
+        <button 
+            onClick={() => handleReaction('sad')}
+            className={`flex flex-col items-center gap-1 group transition-all active:scale-90 ${userVotes.sad ? 'opacity-100' : 'opacity-60 hover:opacity-100'}`}
+        >
+            <div className={`p-3 rounded-full transition-all shadow-sm ${userVotes.sad ? 'bg-purple-100 text-purple-500 scale-110 shadow-purple-200' : 'bg-gray-50 text-gray-400 hover:bg-purple-50 hover:text-purple-400'}`}>
+                <Star size={24} fill={userVotes.sad ? "currentColor" : "none"} />
+            </div>
+            <span className="text-xs font-bold text-juro-text/70">{reactions.sad}</span>
+            <span className="text-[10px] uppercase tracking-wide text-gray-400 hidden md:block">Tocante</span>
+        </button>
       </div>
 
       <div className="flex flex-col sm:flex-row gap-3 w-full sm:w-auto items-center justify-center flex-wrap">

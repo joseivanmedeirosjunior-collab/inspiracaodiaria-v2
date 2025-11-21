@@ -17,7 +17,9 @@ export default function App() {
   // App State
   const [quoteData, setQuoteData] = useState<InspirationQuote | null>(null);
   const [loading, setLoading] = useState<boolean>(true);
-  const [currentDate, setCurrentDate] = useState<string>('');
+  const [currentDateString, setCurrentDateString] = useState<string>('');
+  // Armazena o objeto Date da frase atual para passar ao sistema de reações
+  const [quoteDate, setQuoteDate] = useState<Date>(new Date());
 
   // Handle Hash Change (Routing)
   useEffect(() => {
@@ -31,6 +33,7 @@ export default function App() {
 
   const loadData = useCallback(async () => {
     const todayDate = new Date();
+    setQuoteDate(todayDate);
     
     const formattedDate = new Intl.DateTimeFormat('pt-BR', {
       day: 'numeric',
@@ -38,7 +41,7 @@ export default function App() {
       year: 'numeric'
     }).format(todayDate);
     
-    setCurrentDate(formattedDate);
+    setCurrentDateString(formattedDate);
     setLoading(true);
 
     try {
@@ -122,12 +125,12 @@ export default function App() {
             <Sparkles size={20} />
           </div>
           <p className="text-lg md:text-xl text-juro-text font-medium opacity-60 mt-2">
-            {currentDate}
+            {currentDateString}
           </p>
         </div>
 
         <div className="container mx-auto flex justify-center">
-            <QuoteCard data={quoteData} loading={loading} />
+            <QuoteCard data={quoteData} loading={loading} date={quoteDate} />
         </div>
       </main>
 

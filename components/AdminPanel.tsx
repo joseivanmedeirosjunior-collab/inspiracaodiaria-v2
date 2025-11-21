@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Lock, Calendar, Check, RefreshCw, X, Loader2, ArrowLeft, Edit2, Save, Trash2 } from 'lucide-react';
+import { Lock, Calendar, Check, RefreshCw, X, Loader2, ArrowLeft, Edit2, Save } from 'lucide-react';
 import { fetchDailyInspiration } from '../services/geminiService';
 import { getQueue, updateQueueItem, formatDateKey } from '../services/queueService';
 import { QueueItem, InspirationQuote } from '../types';
@@ -139,41 +139,29 @@ export const AdminPanel: React.FC = () => {
   };
 
   const handleReject = async (date: Date) => {
-    if (window.confirm('Deseja remover esta aprovação e voltar para rascunho?')) {
+    if (window.confirm('⚠️ Atenção\n\nTem certeza que deseja cancelar a aprovação desta frase?\n\nEla voltará para o status de RASCUNHO e não será exibida no app até ser aprovada novamente.')) {
         const dateKey = formatDateKey(date);
         const currentItem = queue[dateKey];
         
         try {
           if (currentItem && currentItem.data) {
-             // Volta para rascunho
+             // Volta para rascunho mantendo os dados
              await updateQueueItem(date, 'draft', currentItem.data);
+             setQueue(prev => ({
+                ...prev,
+                [dateKey]: { ...prev[dateKey], status: 'draft' }
+             }));
+          } else {
+             // Caso raro onde não há dados (fallback)
+             await updateQueueItem(date, 'draft');
              setQueue(prev => ({
                 ...prev,
                 [dateKey]: { ...prev[dateKey], status: 'draft' }
              }));
           }
         } catch (e) {
-          console.error(e);
-        }
-    }
-  };
-
-  const handleDelete = async (date: Date) => {
-    if (window.confirm('Tem certeza que deseja EXCLUIR esta frase? O dia ficará vazio.')) {
-        const dateKey = formatDateKey(date);
-        try {
-             // Limpa no banco
-             await updateQueueItem(date, 'empty');
-             // Remove do estado local
-             setQueue(prev => {
-               const newQ = { ...prev };
-               delete newQ[dateKey];
-               return newQ;
-             });
-             // Reativar autofill se necessário, mas deixamos manual para o usuário decidir
-        } catch (e) {
-          console.error(e);
-          alert("Erro ao excluir.");
+          console.error("Erro ao rejeitar:", e);
+          alert("Erro ao cancelar aprovação. Tente novamente.");
         }
     }
   };
@@ -438,17 +426,6 @@ export const AdminPanel: React.FC = () => {
                                 >
                                     <Edit2 size={16} />
                                     {hasDraft ? 'Editar' : 'Escrever Manualmente'}
-                                </button>
-                            )}
-
-                            {/* Botão de Excluir (aparece se tiver dados) */}
-                            {hasDraft && (
-                                <button
-                                    onClick={() => handleDelete(date)}
-                                    className="flex items-center gap-2 px-3 py-2 rounded-lg text-red-400 hover:bg-red-50 hover:text-red-600 font-medium text-sm transition-colors"
-                                    title="Excluir frase"
-                                >
-                                    <Trash2 size={16} />
                                 </button>
                             )}
 

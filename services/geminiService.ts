@@ -1,9 +1,30 @@
 import { GoogleGenAI, Type, Modality } from "@google/genai";
 import { InspirationQuote } from "../types";
 
+// Helper para obter a chave de API de forma segura em diferentes ambientes (Vite vs Node)
+const getApiKey = (): string | undefined => {
+  // Prioridade para o padrão Vite (Cloudflare Pages)
+  if (typeof import.meta !== 'undefined' && import.meta.env && import.meta.env.VITE_API_KEY) {
+    return import.meta.env.VITE_API_KEY;
+  }
+  // Fallback para process.env (legado ou local)
+  if (typeof process !== 'undefined' && process.env && process.env.API_KEY) {
+    return process.env.API_KEY;
+  }
+  return undefined;
+};
+
 export const fetchDailyInspiration = async (excludeAuthors: string[] = []): Promise<InspirationQuote> => {
-  // Initialize client with process.env.API_KEY as per guidelines
-  const ai = new GoogleGenAI({ apiKey: process.env.AIzaSyCZomq2mjDpLPaYn7k6SpQMEQEYhgELCDQ });
+  const apiKey = getApiKey();
+  
+  if (!apiKey) {
+    console.error("API Key não encontrada. Verifique se VITE_API_KEY está configurada no Cloudflare.");
+    // Retorna um erro controlado ou lança exceção para ser tratada na UI
+    throw new Error("API Key missing");
+  }
+
+  // Inicialização Lazy (apenas quando chama a função)
+  const ai = new GoogleGenAI({ apiKey });
 
   const modelId = "gemini-2.5-flash";
   
@@ -87,6 +108,7 @@ export const fetchDailyInspiration = async (excludeAuthors: string[] = []): Prom
 
   } catch (error) {
     console.error("Error fetching quote from Gemini:", error);
+    // Fallback em caso de erro grave
     return {
       quote: "Pés, para que os quero, se tenho asas para voar?",
       author: "Frida Kahlo",
@@ -98,8 +120,10 @@ export const fetchDailyInspiration = async (excludeAuthors: string[] = []): Prom
 
 export const fetchQuoteAudio = async (text: string): Promise<string | null> => {
   try {
-    // Initialize client with process.env.API_KEY as per guidelines
-    const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+    const apiKey = getApiKey();
+    if (!apiKey) return null;
+
+    const ai = new GoogleGenAI({ apiKey });
     
     const response = await ai.models.generateContent({
       model: "gemini-2.5-flash-preview-tts",
