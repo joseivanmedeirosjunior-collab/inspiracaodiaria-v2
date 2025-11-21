@@ -78,11 +78,16 @@ export const AdminPanel: React.FC = () => {
 
   const handleLogin = (e: React.FormEvent) => {
     e.preventDefault();
-    if (password.trim().toLowerCase() === 'admin') {
+    
+    // Busca senha do Cloudflare ou usa 'admin' como fallback temporário
+    const correctPassword = import.meta.env.VITE_ADMIN_PASSWORD || 'admin';
+
+    // Comparação exata (sem toLowerCase para permitir senhas fortes)
+    if (password === correctPassword) {
       setIsAuthenticated(true);
       sessionStorage.setItem('juro_admin_auth', 'true');
     } else {
-      alert('Senha incorreta. Tente "admin".');
+      alert('Senha incorreta.');
       setPassword('');
     }
   };
@@ -117,9 +122,13 @@ export const AdminPanel: React.FC = () => {
           data: newQuote
         }
       }));
-    } catch (error) {
+    } catch (error: any) {
       console.error("Erro ao gerar frase", error);
-      if (!isAuto) alert("Erro ao gerar frase. Tente novamente.");
+      if (!isAuto) {
+         // Mensagem de erro amigável baseada na falha
+         const msg = error.message || "Erro desconhecido ao conectar com a IA.";
+         alert(`Erro ao gerar frase: ${msg}`);
+      }
     } finally {
       setLoadingDates(prev => ({ ...prev, [dateKey]: false }));
     }
