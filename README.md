@@ -35,6 +35,10 @@ O app agora usa a API do ChatGPT (OpenAI) para gerar e narrar as frases. A chave
 
 _Dica rápida_: variáveis criadas em **Preview** não entram no build de **Production**. Verifique se está na aba certa.
 
+### Voz do botão "Ouvir"
+- A síntese de áudio usa o endpoint `/audio/speech` com o modelo `gpt-4o-mini-tts` e voz `shimmer` (feminina, mais natural/empolgante).
+- Se a chamada falhar ou a chave estiver bloqueada, o app cai para a voz nativa do navegador (SpeechSynthesis) mantendo a reprodução.
+
 ### Se aparecer 429 / "insufficient_quota"
 - A mensagem vem da OpenAI quando a chave usada não tem créditos liberados, mesmo que a conta mostre saldo (ex.: chave criada em projeto sem billing ativo ou com limite bloqueado).
 - Opções rápidas: (1) gerar uma nova chave dentro do projeto que tem crédito e colocá-la em `VITE_OPENAI_API_KEY` + redeploy; (2) aceitar a frase local que o painel salva automaticamente quando detecta 429; (3) se quiser custo zero, trocar para um provedor com free tier e atualizar o serviço de IA.

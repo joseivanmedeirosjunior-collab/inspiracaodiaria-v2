@@ -322,7 +322,7 @@ export const fetchQuoteAudio = async (text: string): Promise<string | null> => {
       body: JSON.stringify({
         model: "gpt-4o-mini-tts",
         input: text,
-        voice: "alloy",
+        voice: "shimmer", // voz feminina mais natural/empolgante
         response_format: "mp3",
       }),
     });
