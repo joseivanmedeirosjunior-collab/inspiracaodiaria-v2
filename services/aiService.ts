@@ -355,7 +355,7 @@ export const fetchDailyInspiration = async (
 export const fetchQuoteAudio = async (text: string): Promise<string | null> => {
   refreshQuotaBlockIfExpired();
 
-  // 1) Tenta primeiro com Gemini (voz Kore)
+  // Tenta apenas com Gemini (voz Kore)
   const geminiKey = getGeminiApiKey();
   if (geminiKey) {
     try {
@@ -390,35 +390,5 @@ export const fetchQuoteAudio = async (text: string): Promise<string | null> => {
     }
   }
 
-  // 2) Fallback para OpenAI TTS, se configurado e sem bloqueio
-  const apiKey = getApiKey();
-  if (!apiKey || quotaTemporarilyBlocked) return null;
-
-  try {
-    const response = await fetch(`${OPENAI_API_URL}/audio/speech`, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${apiKey}`,
-      },
-      body: JSON.stringify({
-        model: "gpt-4o-mini-tts",
-        input: text,
-        voice: "shimmer", // fallback empolgante caso Gemini falhe
-        response_format: "mp3",
-      }),
-    });
-
-    if (!response.ok) {
-      const errorText = await response.text();
-      throw new Error(`OpenAI TTS retornou ${response.status}: ${errorText}`);
-    }
-
-    const audioBuffer = await response.arrayBuffer();
-    const audioBlob = new Blob([audioBuffer], { type: "audio/mpeg" });
-    return URL.createObjectURL(audioBlob);
-  } catch (error) {
-    console.error("Erro OpenAI (áudio):", error);
-    return null;
-  }
+  return null;
 };
