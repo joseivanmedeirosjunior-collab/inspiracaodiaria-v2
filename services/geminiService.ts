@@ -1,13 +1,13 @@
 import { GoogleGenAI, Type, Modality } from "@google/genai";
 import { InspirationQuote } from "../types";
 
-// Helper para obter a chave de API de forma segura em diferentes ambientes (Vite vs Node)
+// Helper para obter a chave de API de forma segura
 const getApiKey = (): string | undefined => {
-  // Prioridade para o padrão Vite (Cloudflare Pages)
+  // Tenta ler do Vite (Cloudflare)
   if (typeof import.meta !== 'undefined' && import.meta.env && import.meta.env.VITE_API_KEY) {
     return import.meta.env.VITE_API_KEY;
   }
-  // Fallback para process.env (legado ou local)
+  // Tenta ler do ambiente local (Legacy)
   if (typeof process !== 'undefined' && process.env && process.env.API_KEY) {
     return process.env.API_KEY;
   }
@@ -17,15 +17,16 @@ const getApiKey = (): string | undefined => {
 export const fetchDailyInspiration = async (excludeAuthors: string[] = []): Promise<InspirationQuote> => {
   const apiKey = getApiKey();
   
+  // Debug Log (não mostra a chave inteira, apenas se existe)
+  console.log("Gemini Service - API Key detectada:", !!apiKey);
+  
   if (!apiKey) {
-    console.error("API Key não encontrada. Verifique se VITE_API_KEY está configurada no Cloudflare.");
-    // Retorna um erro controlado ou lança exceção para ser tratada na UI
-    throw new Error("API Key missing");
+    console.error("FATAL: API Key não encontrada. Verifique o painel do Cloudflare.");
+    throw new Error("Chave de API não configurada no sistema.");
   }
 
-  // Inicialização Lazy (apenas quando chama a função)
+  // Inicialização Lazy
   const ai = new GoogleGenAI({ apiKey });
-
   const modelId = "gemini-2.5-flash";
   
   const themes = [
@@ -43,27 +44,20 @@ export const fetchDailyInspiration = async (excludeAuthors: string[] = []): Prom
   const randomSeed = Math.floor(Math.random() * 1000000);
 
   const exclusionInstruction = excludeAuthors.length > 0
-    ? `IMPORTANTE: Para garantir variedade, NÃO utilize as seguintes autoras (pois já foram usadas recentemente): ${excludeAuthors.join(", ")}.`
+    ? `IMPORTANTE: NÃO utilize estas autoras: ${excludeAuthors.join(", ")}.`
     : "";
 
   const prompt = `
-    Tarefa: Encontrar uma frase CURTA, PODEROSA e MOTIVACIONAL de uma mulher inspiradora.
-    
-    CONTEXTO OBRIGATÓRIO DESTA BUSCA:
-    O objetivo é empoderar mulheres, trazer coragem e elevar a autoestima.
-    Foco Temático: ${randomTheme}
-    Seed Aleatório: ${randomSeed}
+    Tarefa: Frase CURTA e MOTIVACIONAL de uma mulher inspiradora.
+    Tema: ${randomTheme}
+    Seed: ${randomSeed}
     ${exclusionInstruction}
 
-    Requisitos RÍGIDOS:
-    1. ESTILO: A frase deve ser CURTA e IMPACTANTE (máximo 1 ou 2 orações). Evite textos longos.
-    2. MENSAGEM: Deve transmitir força, coragem, determinação ou amor próprio. Algo que uma mulher leia e sinta vontade de conquistar o mundo.
-    3. AUTORA: Apenas mulheres. Tente variar entre clássicas e contemporâneas.
-    4. VERACIDADE: A frase deve ser autêntica.
-    5. DIVERSIDADE: Busque autoras de diferentes origens, não apenas americanas/europeias.
-    6. IDIOMA: Português do Brasil (tradução natural e fluida).
-
-    Saída JSON esperada com: quote, author, role, country.
+    Requisitos:
+    1. Frase CURTA (max 2 orações).
+    2. Autora mulher.
+    3. Português do Brasil.
+    4. JSON Output.
   `;
 
   try {
@@ -75,22 +69,10 @@ export const fetchDailyInspiration = async (excludeAuthors: string[] = []): Prom
         responseSchema: {
           type: Type.OBJECT,
           properties: {
-            quote: {
-              type: Type.STRING,
-              description: "A frase curta e empoderadora em português."
-            },
-            author: {
-              type: Type.STRING,
-              description: "Nome da autora."
-            },
-            role: {
-              type: Type.STRING,
-              description: "Papel da autora (ex: Escritora, Ativista, Cantora)."
-            },
-            country: {
-              type: Type.STRING,
-              description: "País de origem."
-            }
+            quote: { type: Type.STRING },
+            author: { type: Type.STRING },
+            role: { type: Type.STRING },
+            country: { type: Type.STRING }
           },
           required: ["quote", "author", "role", "country"],
         },
@@ -99,16 +81,13 @@ export const fetchDailyInspiration = async (excludeAuthors: string[] = []): Prom
     });
 
     const jsonText = response.text;
-    if (!jsonText) {
-      throw new Error("No text returned from Gemini");
-    }
+    if (!jsonText) throw new Error("Gemini não retornou texto");
 
-    const data = JSON.parse(jsonText) as InspirationQuote;
-    return data;
+    return JSON.parse(jsonText) as InspirationQuote;
 
   } catch (error) {
-    console.error("Error fetching quote from Gemini:", error);
-    // Fallback em caso de erro grave
+    console.error("Erro Gemini:", error);
+    // Fallback seguro
     return {
       quote: "Pés, para que os quero, se tenho asas para voar?",
       author: "Frida Kahlo",
@@ -127,23 +106,18 @@ export const fetchQuoteAudio = async (text: string): Promise<string | null> => {
     
     const response = await ai.models.generateContent({
       model: "gemini-2.5-flash-preview-tts",
-      contents: {
-        parts: [{ text: text }],
-      },
+      contents: { parts: [{ text: text }] },
       config: {
         responseModalities: [Modality.AUDIO],
         speechConfig: {
-          voiceConfig: {
-            prebuiltVoiceConfig: { voiceName: 'Kore' },
-          },
+          voiceConfig: { prebuiltVoiceConfig: { voiceName: 'Kore' } },
         },
       },
     });
 
-    const base64Audio = response.candidates?.[0]?.content?.parts?.[0]?.inlineData?.data;
-    return base64Audio || null;
+    return response.candidates?.[0]?.content?.parts?.[0]?.inlineData?.data || null;
   } catch (error) {
-    console.error("Error generating audio:", error);
+    console.error("Erro Audio:", error);
     return null;
   }
 };
