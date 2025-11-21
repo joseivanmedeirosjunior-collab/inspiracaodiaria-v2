@@ -63,7 +63,7 @@ const parseInspirationContent = (content: unknown): InspirationQuote => {
   throw new Error("Formato de resposta inesperado da OpenAI");
 };
 
-const isDuplicateQuote = (
+export const isDuplicateQuote = (
   quote: InspirationQuote,
   excludeAuthors: string[],
   excludeQuotes: string[]
@@ -109,7 +109,7 @@ export const fetchDailyInspiration = async (
   const uniqueAuthors = Array.from(new Set(excludeAuthors.map(normalize).filter(Boolean)));
   const uniqueQuotes = Array.from(new Set(excludeQuotes.map(normalize).filter(Boolean)));
 
-  const maxItems = 15;
+  const maxItems = 50;
   const authorsList = uniqueAuthors.slice(-maxItems).join(", ");
   const quotesList = uniqueQuotes.slice(-maxItems).join(" | ");
 

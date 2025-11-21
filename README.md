@@ -34,3 +34,7 @@ O app agora usa a API do ChatGPT (OpenAI) para gerar e narrar as frases. A chave
 3) Depois do deploy, teste o painel Admin. Se o botão "Gerar" não responder, abra o console do navegador: se aparecer `OpenAI API Key não encontrada`, a variável não chegou ao build (repita os passos 1 e 2).
 
 _Dica rápida_: variáveis criadas em **Preview** não entram no build de **Production**. Verifique se está na aba certa.
+
+## Evitando frases repetidas
+- Antes de gerar uma nova frase, o painel Admin agora lê todas as citações existentes no Supabase (agendadas, pendentes ou aprovadas) e envia essa lista como exclusão para a IA.
+- Se mesmo assim a resposta vier duplicada, o app tenta novas gerações com listas expandidas e só salva quando encontra uma frase inédita.

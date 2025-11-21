@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Lock, Calendar, Check, RefreshCw, X, Loader2, ArrowLeft, Edit2, Save, AlertTriangle } from 'lucide-react';
-import { fetchDailyInspiration, isOpenAIApiConfigured } from '../services/aiService';
-import { getQueue, updateQueueItem, formatDateKey } from '../services/queueService';
+import { fetchDailyInspiration, isDuplicateQuote, isOpenAIApiConfigured } from '../services/aiService';
+import { getAllUsedQuotes, getQueue, updateQueueItem, formatDateKey } from '../services/queueService';
 import { QueueItem, InspirationQuote } from '../types';
 
 export const AdminPanel: React.FC = () => {
@@ -55,6 +55,36 @@ export const AdminPanel: React.FC = () => {
     return Object.values(queue)
       .map((item: QueueItem) => item.data?.quote)
       .filter((quote): quote is string => !!quote);
+  };
+
+  const normalize = (text?: string | null): string => (text || "").toLowerCase().replace(/\s+/g, " ").trim();
+
+  const dedupeByNormalized = (items: string[]): string[] => {
+    const seen = new Set<string>();
+    const result: string[] = [];
+
+    items.forEach((item) => {
+      const norm = normalize(item);
+      if (norm && !seen.has(norm)) {
+        seen.add(norm);
+        result.push(item);
+      }
+    });
+
+    return result;
+  };
+
+  const buildGlobalExclusions = async (): Promise<{ authors: string[]; quotes: string[] }> => {
+    const [dbData, localAuthors, localQuotes] = await Promise.all([
+      getAllUsedQuotes(),
+      Promise.resolve(getUsedAuthors()),
+      Promise.resolve(getUsedQuotes()),
+    ]);
+
+    const authors = dedupeByNormalized([...(dbData.authors || []), ...localAuthors]);
+    const quotes = dedupeByNormalized([...(dbData.quotes || []), ...localQuotes]);
+
+    return { authors, quotes };
   };
 
   // Efeito para preenchimento automático sequencial
@@ -118,17 +148,25 @@ export const AdminPanel: React.FC = () => {
     setLoadingDates(prev => ({ ...prev, [dateKey]: true }));
     
     try {
-      // 1. Coleta autoras já usadas para enviar como exclusão
-      const usedAuthors = getUsedAuthors();
-      const usedQuotes = getUsedQuotes();
+      // 1. Coleta autoras já usadas para enviar como exclusão (banco + memória)
+      const { authors: excludeAuthors, quotes: excludeQuotes } = await buildGlobalExclusions();
 
       // 2. Gera com IA passando as exclusões para evitar repetição
-      const newQuote = await fetchDailyInspiration(usedAuthors, usedQuotes);
-      
-      // 3. Salva no Supabase
+      let newQuote = await fetchDailyInspiration(excludeAuthors, excludeQuotes);
+
+      // 3. Se ainda assim vier repetida, tenta novamente com listas expandidas
+      let retries = 0;
+      while (isDuplicateQuote(newQuote, excludeAuthors, excludeQuotes) && retries < 2) {
+        excludeAuthors.push(newQuote.author);
+        excludeQuotes.push(newQuote.quote);
+        newQuote = await fetchDailyInspiration(excludeAuthors, excludeQuotes);
+        retries += 1;
+      }
+
+      // 4. Salva no Supabase
       await updateQueueItem(date, 'draft', newQuote);
-      
-      // 4. Atualiza estado local para refletir mudança instantaneamente
+
+      // 5. Atualiza estado local para refletir mudança instantaneamente
       setQueue(prev => ({
         ...prev,
         [dateKey]: {

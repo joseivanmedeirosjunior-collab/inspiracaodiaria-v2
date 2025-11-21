@@ -7,6 +7,32 @@ const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZ
 
 const supabase = createClient(SUPABASE_URL, SUPABASE_KEY);
 
+export const getAllUsedQuotes = async (): Promise<{ authors: string[]; quotes: string[] }> => {
+  try {
+    const { data, error } = await supabase
+      .from('quotes_queue')
+      .select('data');
+
+    if (error) {
+      console.error("Erro ao buscar todas as frases do Supabase:", error);
+      return { authors: [], quotes: [] };
+    }
+
+    const authors: string[] = [];
+    const quotes: string[] = [];
+
+    (data || []).forEach((row: any) => {
+      if (row?.data?.author) authors.push(row.data.author);
+      if (row?.data?.quote) quotes.push(row.data.quote);
+    });
+
+    return { authors, quotes };
+  } catch (e) {
+    console.error("Erro geral ao buscar frases usadas", e);
+    return { authors: [], quotes: [] };
+  }
+};
+
 // Helper to format date as YYYY-MM-DD using LOCAL time to avoid timezone issues
 export const formatDateKey = (date: Date): string => {
   const year = date.getFullYear();
