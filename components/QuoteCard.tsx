@@ -17,6 +17,7 @@ export const QuoteCard: React.FC<QuoteCardProps> = ({ data, loading, date }) => 
   const [isSpeaking, setIsSpeaking] = useState(false);
   const [isLoadingAudio, setIsLoadingAudio] = useState(false);
   const [audioCache, setAudioCache] = useState<string | null>(null);
+  const [usingNativeTts, setUsingNativeTts] = useState(false);
   
   // Estados de Reação
   const [reactions, setReactions] = useState<ReactionCounts>({ love: 0, power: 0, sad: 0 });
@@ -65,6 +66,12 @@ export const QuoteCard: React.FC<QuoteCardProps> = ({ data, loading, date }) => 
         // ignore
       }
     }
+
+    if (usingNativeTts && typeof window !== 'undefined' && 'speechSynthesis' in window) {
+      window.speechSynthesis.cancel();
+    }
+
+    setUsingNativeTts(false);
     setIsSpeaking(false);
   };
 
@@ -83,6 +90,42 @@ export const QuoteCard: React.FC<QuoteCardProps> = ({ data, loading, date }) => 
     } catch (error) {
       console.error("Erro ao reproduzir áudio:", error);
       setIsSpeaking(false);
+    }
+  };
+
+  const speakWithWebVoice = (text: string): boolean => {
+    if (typeof window === 'undefined' || !('speechSynthesis' in window)) return false;
+
+    try {
+      const synth = window.speechSynthesis;
+      const voices = synth.getVoices();
+
+      if (!voices || voices.length === 0) return false;
+
+      const preferredVoice =
+        voices.find((v) => /pt-?br/i.test(v.lang) && /female|mulher|woman|luna|camila|maria/i.test(v.name.toLowerCase())) ||
+        voices.find((v) => /female|woman|mulher/i.test(v.name.toLowerCase())) ||
+        voices.find((v) => /pt-?br/i.test(v.lang)) ||
+        voices[0];
+
+      const utterance = new SpeechSynthesisUtterance(text);
+      utterance.voice = preferredVoice;
+      utterance.pitch = 1.05;
+      utterance.rate = 0.95;
+
+      utterance.onend = () => {
+        setIsSpeaking(false);
+        setUsingNativeTts(false);
+      };
+
+      synth.cancel();
+      synth.speak(utterance);
+      setIsSpeaking(true);
+      setUsingNativeTts(true);
+      return true;
+    } catch (error) {
+      console.error('Erro ao usar Web Speech API:', error);
+      return false;
     }
   };
 
@@ -110,6 +153,12 @@ export const QuoteCard: React.FC<QuoteCardProps> = ({ data, loading, date }) => 
           return audioUrl;
         });
         await playAudio(audioUrl);
+        return;
+      }
+
+      const spoken = speakWithWebVoice(textToSpeak);
+      if (spoken) {
+        return;
       }
     } catch (error) {
       console.error("Falha ao obter áudio", error);
