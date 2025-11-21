@@ -24,6 +24,43 @@ const getApiKey = (): string | undefined => {
 
 export const isOpenAIApiConfigured = (): boolean => !!getApiKey();
 
+const isInspirationQuote = (value: any): value is InspirationQuote => {
+  return (
+    value &&
+    typeof value.quote === "string" &&
+    typeof value.author === "string" &&
+    typeof value.role === "string" &&
+    typeof value.country === "string"
+  );
+};
+
+const parseInspirationContent = (content: unknown): InspirationQuote => {
+  if (!content) throw new Error("Resposta vazia da OpenAI");
+
+  // 1) Conteúdo já como objeto
+  if (typeof content === "object" && !Array.isArray(content) && isInspirationQuote(content)) {
+    return content;
+  }
+
+  // 2) Conteúdo string com JSON
+  if (typeof content === "string") {
+    return JSON.parse(content) as InspirationQuote;
+  }
+
+  // 3) Conteúdo como lista (novo formato chat/completions com response_format)
+  if (Array.isArray(content)) {
+    const textChunk = content.find((chunk) =>
+      typeof chunk === "object" && chunk !== null && "text" in (chunk as any)
+    ) as { text?: string } | undefined;
+
+    const text = textChunk?.text || content.map((c: any) => c?.text || "").join("");
+    if (!text) throw new Error("Resposta vazia da OpenAI");
+    return JSON.parse(text) as InspirationQuote;
+  }
+
+  throw new Error("Formato de resposta inesperado da OpenAI");
+};
+
 export const fetchDailyInspiration = async (excludeAuthors: string[] = []): Promise<InspirationQuote> => {
   const apiKey = getApiKey();
 
@@ -101,10 +138,7 @@ export const fetchDailyInspiration = async (excludeAuthors: string[] = []): Prom
     const data = await response.json();
     const content = data?.choices?.[0]?.message?.content;
 
-    if (!content) throw new Error("Resposta vazia da OpenAI");
-
-    const parsed = typeof content === "string" ? JSON.parse(content) : content;
-    return parsed as InspirationQuote;
+    return parseInspirationContent(content);
   } catch (error) {
     console.error("Erro OpenAI (texto):", error);
 
