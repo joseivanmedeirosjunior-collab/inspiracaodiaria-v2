@@ -14,6 +14,9 @@ const getApiKey = (): string | undefined => {
   return undefined;
 };
 
+// Exposto para o painel Admin conseguir exibir um aviso claro quando a chave faltar
+export const isGeminiApiConfigured = (): boolean => !!getApiKey();
+
 export const fetchDailyInspiration = async (excludeAuthors: string[] = []): Promise<InspirationQuote> => {
   const apiKey = getApiKey();
   
