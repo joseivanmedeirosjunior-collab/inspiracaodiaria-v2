@@ -1,28 +1,35 @@
 import { GoogleGenAI, Type, Modality } from "@google/genai";
 import { InspirationQuote } from "../types";
 
+// Identifica placeholders comuns de build que não devem ser usados como chave real
+const isPlaceholder = (value: string | undefined): boolean => {
+  if (!value) return true;
+  const normalized = value.trim();
+  return normalized === '' || normalized.includes('VITE_API_KEY') || normalized.includes('%');
+};
+
 // Helper para obter a chave de API de forma segura
 const getApiKey = (): string | undefined => {
   // 1) Build-time via Vite (Cloudflare Pages)
-  if (typeof import.meta !== 'undefined' && import.meta.env?.VITE_API_KEY) {
+  if (typeof import.meta !== 'undefined' && !isPlaceholder(import.meta.env?.VITE_API_KEY)) {
     return import.meta.env.VITE_API_KEY;
   }
 
   // 2) Fallback para builds que expõem VITE_API_KEY em process.env (alguns runners)
-  if (typeof process !== 'undefined' && process.env?.VITE_API_KEY) {
+  if (typeof process !== 'undefined' && !isPlaceholder(process.env?.VITE_API_KEY)) {
     return process.env.VITE_API_KEY;
   }
 
   // 3) Fallback para builds antigos/local (chave sem prefixo VITE)
-  if (typeof process !== 'undefined' && process.env?.API_KEY) {
+  if (typeof process !== 'undefined' && !isPlaceholder(process.env?.API_KEY)) {
     return process.env.API_KEY;
   }
 
   // 4) Fallback de emergência: meta tag no index.html (preenchida no build do Pages)
   if (typeof document !== 'undefined') {
     const meta = document.querySelector('meta[name="vite-api-key"]');
-    const content = meta?.getAttribute('content');
-    if (content) return content;
+    const content = meta?.getAttribute('content') || undefined;
+    if (!isPlaceholder(content)) return content;
   }
 
   return undefined;
