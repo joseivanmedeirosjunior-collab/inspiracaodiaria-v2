@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Lock, Calendar, Check, RefreshCw, X, Loader2, ArrowLeft, Edit2, Save, AlertTriangle } from 'lucide-react';
-import { fetchDailyInspiration, generateFallbackQuote, isDuplicateQuote, isOpenAIApiConfigured, QuotaExceededError } from '../services/aiService';
+import { fetchDailyInspiration, generateFallbackQuote, isDuplicateQuote, isOpenAIApiConfigured, isQuotaBlocked, QuotaExceededError } from '../services/aiService';
 import { DuplicateQuoteError, getAllUsedQuotes, getQueue, updateQueueItem, formatDateKey } from '../services/queueService';
 import { QueueItem, InspirationQuote } from '../types';
 
@@ -17,6 +17,7 @@ export const AdminPanel: React.FC = () => {
 
   // Status da API para feedback preventivo
   const [hasOpenAIKey, setHasOpenAIKey] = useState<boolean>(true);
+  const [quotaBlocked, setQuotaBlocked] = useState<boolean>(false);
 
   // Referência para controlar o loop de geração automática
   const autoFillRef = useRef(false);
@@ -39,6 +40,7 @@ export const AdminPanel: React.FC = () => {
         setLoadingQueue(false);
         autoFillRef.current = true; // Ativa o gatilho para preenchimento automático após carregar dados
         setHasOpenAIKey(isOpenAIApiConfigured());
+        setQuotaBlocked(isQuotaBlocked());
       };
       fetchQueue();
     }
@@ -159,6 +161,32 @@ export const AdminPanel: React.FC = () => {
       // 1. Coleta autoras já usadas para enviar como exclusão (banco + memória)
       const { authors: excludeAuthors, quotes: excludeQuotes } = await buildGlobalExclusions();
 
+      const currentlyBlocked = quotaBlocked || isQuotaBlocked();
+      if (currentlyBlocked) {
+        const fallbackQuote = generateFallbackQuote(excludeAuthors, excludeQuotes);
+        await updateQueueItem(date, 'draft', fallbackQuote);
+        setQuotaBlocked(true);
+
+        if (!isAuto) {
+          alert(
+            'A API da OpenAI está bloqueada por cota. Usei uma frase local para não parar o fluxo. ' +
+            'Atualize a chave em um projeto com crédito ou mantenha o modo sem custo usando apenas fallbacks.'
+          );
+        }
+
+        // Reflete no estado local
+        setQueue(prev => ({
+          ...prev,
+          [dateKey]: {
+            date: dateKey,
+            status: 'draft',
+            data: fallbackQuote
+          }
+        }));
+
+        return;
+      }
+
       const maxAttempts = 5;
       let attempt = 0;
       let storedQuote: InspirationQuote | null = null;
@@ -188,6 +216,7 @@ export const AdminPanel: React.FC = () => {
           }
         } catch (error) {
           if (error instanceof QuotaExceededError) {
+            setQuotaBlocked(true);
             const fallbackQuote = error.fallback || generateFallbackQuote(excludeAuthors, excludeQuotes);
             await updateQueueItem(date, 'draft', fallbackQuote);
             storedQuote = fallbackQuote;
@@ -370,6 +399,17 @@ export const AdminPanel: React.FC = () => {
             <p className="text-sm text-amber-700">
               Defina <strong>VITE_OPENAI_API_KEY</strong> nas variáveis do projeto no Cloudflare Pages (ou use um .env local) e
               publique novamente. Enquanto isso, use "Escrever Manualmente" ou edite um rascunho existente.
+            </p>
+          </div>
+        </div>
+      )}
+      {quotaBlocked && (
+        <div className="mb-6 flex items-start gap-3 rounded-2xl border border-red-200 bg-red-50 p-4 text-red-800">
+          <AlertTriangle size={18} className="mt-1" />
+          <div>
+            <p className="font-semibold">OpenAI bloqueou por cota. Estamos usando frases locais para não parar.</p>
+            <p className="text-sm text-red-700">
+              Gere uma nova chave no projeto com créditos ou mantenha o modo sem custo com as frases de fallback. Após atualizar a chave, publique novamente no Cloudflare Pages.
             </p>
           </div>
         </div>

@@ -3,6 +3,10 @@ import { InspirationQuote } from "../types";
 const OPENAI_API_URL = "https://api.openai.com/v1";
 const DEFAULT_AUTHOR = "JURO";
 
+let quotaTemporarilyBlocked = false;
+
+export const isQuotaBlocked = () => quotaTemporarilyBlocked;
+
 export class QuotaExceededError extends Error {
   fallback?: InspirationQuote;
 
@@ -145,9 +149,14 @@ export const fetchDailyInspiration = async (
 ): Promise<InspirationQuote> => {
   const apiKey = getApiKey();
 
-  if (!apiKey) {
-    console.error("FATAL: OpenAI API Key não encontrada. Configure VITE_OPENAI_API_KEY.");
-    throw new Error("Chave OpenAI ausente.");
+  if (!apiKey || quotaTemporarilyBlocked) {
+    if (!apiKey) {
+      console.warn("OpenAI API Key ausente. Retornando fallback local.");
+    } else if (quotaTemporarilyBlocked) {
+      console.warn("OpenAI temporariamente bloqueado por cota. Usando fallback local.");
+    }
+
+    return generateFallbackQuote(excludeAuthors, excludeQuotes);
   }
 
   const themes = [
@@ -235,6 +244,7 @@ export const fetchDailyInspiration = async (
         errorText.toLowerCase().includes("quota");
 
       if (isQuotaError) {
+        quotaTemporarilyBlocked = true;
         throw new QuotaExceededError(
           `OpenAI retornou ${response.status}: ${errorText}`,
           fallback
@@ -261,6 +271,7 @@ export const fetchDailyInspiration = async (
     console.error("Erro OpenAI (texto):", error);
 
     if (error instanceof QuotaExceededError && error.fallback) {
+      quotaTemporarilyBlocked = true;
       return error.fallback;
     }
 
@@ -270,7 +281,7 @@ export const fetchDailyInspiration = async (
 
 export const fetchQuoteAudio = async (text: string): Promise<string | null> => {
   const apiKey = getApiKey();
-  if (!apiKey) return null;
+  if (!apiKey || quotaTemporarilyBlocked) return null;
 
   try {
     const response = await fetch(`${OPENAI_API_URL}/audio/speech`, {
