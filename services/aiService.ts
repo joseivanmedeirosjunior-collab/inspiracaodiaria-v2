@@ -1,6 +1,7 @@
 import { InspirationQuote } from "../types";
 
 const OPENAI_API_URL = "https://api.openai.com/v1";
+const DEFAULT_AUTHOR = "JURO";
 
 const isPlaceholder = (value: string | undefined): boolean => {
   if (!value) return true;
@@ -24,7 +25,13 @@ const getApiKey = (): string | undefined => {
 
 export const isOpenAIApiConfigured = (): boolean => !!getApiKey();
 
-const normalize = (text?: string | null): string => (text || "").toLowerCase().replace(/\s+/g, " ").trim();
+const normalize = (text?: string | null): string =>
+  (text || "")
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/\p{Diacritic}/gu, "")
+    .replace(/\s+/g, " ")
+    .trim();
 
 const isInspirationQuote = (value: any): value is InspirationQuote => {
   return (
@@ -74,9 +81,11 @@ export const isDuplicateQuote = (
   const authorsSet = new Set(excludeAuthors.map(normalize).filter(Boolean));
   const quotesSet = new Set(excludeQuotes.map(normalize).filter(Boolean));
 
+  const authorIsDefault = normalizedAuthor === normalize(DEFAULT_AUTHOR);
+
   return (
     (!!normalizedQuote && quotesSet.has(normalizedQuote)) ||
-    (!!normalizedAuthor && authorsSet.has(normalizedAuthor))
+    (!authorIsDefault && !!normalizedAuthor && authorsSet.has(normalizedAuthor))
   );
 };
 
@@ -109,16 +118,18 @@ export const fetchDailyInspiration = async (
   const uniqueAuthors = Array.from(new Set(excludeAuthors.map(normalize).filter(Boolean)));
   const uniqueQuotes = Array.from(new Set(excludeQuotes.map(normalize).filter(Boolean)));
 
-  const maxItems = 50;
-  const authorsList = uniqueAuthors.slice(-maxItems).join(", ");
+  const sanitizedAuthors = uniqueAuthors.filter((author) => normalize(author) !== normalize(DEFAULT_AUTHOR));
+
+  const maxItems = 200;
+  const authorsList = sanitizedAuthors.slice(-maxItems).join(", ");
   const quotesList = uniqueQuotes.slice(-maxItems).join(" | ");
 
   const authorInstruction = authorsList
-    ? `Importante: não use estas autoras já usadas ou semelhantes: ${authorsList}.`
+    ? `Evite repetir ou citar novamente estas autoras já usadas: ${authorsList}.`
     : "";
 
   const quoteInstruction = quotesList
-    ? `Evite repetir frases iguais ou muito parecidas com estas: ${quotesList}.`
+    ? `Evite repetir frases iguais ou muito parecidas com estas já usadas: ${quotesList}.`
     : "";
 
   const payload = {
@@ -145,11 +156,12 @@ export const fetchDailyInspiration = async (
     messages: [
       {
         role: "system" as const,
-        content: "Você gera frases curtas, poderosas e motivacionais em português do Brasil, sempre atribuídas a mulheres reais."
+        content:
+          "Você é uma roteirista e ghostwriter brasileira chamada JURO. Gere frases inéditas, curtas e poderosas em português do Brasil, sempre com autoria fixa JURO (mulher brasileira). Mantenha autenticidade, evite clichês e jamais repita frases ou reformule textos já usados."
       },
       {
         role: "user" as const,
-        content: `Tarefa: gerar uma frase curta e motivacional de uma mulher inspiradora.\nTema: ${randomTheme}\nSeed: ${randomSeed}\n${authorInstruction}\n${quoteInstruction}\nRequisitos: 1) máximo de 2 orações; 2) autora mulher com país e papel; 3) português do Brasil; 4) responda apenas com JSON válido.`
+        content: `Tarefa: gerar uma frase curta, original e motivacional assinada por JURO.\nTema: ${randomTheme}\nSeed: ${randomSeed}\n${authorInstruction}\n${quoteInstruction}\nRequisitos obrigatórios: 1) máx. 2 orações; 2) autora = JURO (mulher brasileira), inclua papel/ocupação coerente e país Brasil; 3) texto em português do Brasil; 4) responda apenas com JSON válido. Evite qualquer repetição ou reescrita de frases já usadas.`
       }
     ]
   };

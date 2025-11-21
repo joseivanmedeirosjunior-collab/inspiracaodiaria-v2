@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Lock, Calendar, Check, RefreshCw, X, Loader2, ArrowLeft, Edit2, Save, AlertTriangle } from 'lucide-react';
 import { fetchDailyInspiration, isDuplicateQuote, isOpenAIApiConfigured } from '../services/aiService';
-import { getAllUsedQuotes, getQueue, updateQueueItem, formatDateKey } from '../services/queueService';
+import { DuplicateQuoteError, getAllUsedQuotes, getQueue, updateQueueItem, formatDateKey } from '../services/queueService';
 import { QueueItem, InspirationQuote } from '../types';
 
 export const AdminPanel: React.FC = () => {
@@ -57,7 +57,14 @@ export const AdminPanel: React.FC = () => {
       .filter((quote): quote is string => !!quote);
   };
 
-  const normalize = (text?: string | null): string => (text || "").toLowerCase().replace(/\s+/g, " ").trim();
+  const DEFAULT_AUTHOR = 'JURO';
+
+  const normalize = (text?: string | null): string => (text || "")
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/\p{Diacritic}/gu, '')
+    .replace(/\s+/g, " ")
+    .trim();
 
   const dedupeByNormalized = (items: string[]): string[] => {
     const seen = new Set<string>();
@@ -81,7 +88,8 @@ export const AdminPanel: React.FC = () => {
       Promise.resolve(getUsedQuotes()),
     ]);
 
-    const authors = dedupeByNormalized([...(dbData.authors || []), ...localAuthors]);
+    const authors = dedupeByNormalized([...(dbData.authors || []), ...localAuthors])
+      .filter((author) => normalize(author) !== normalize(DEFAULT_AUTHOR));
     const quotes = dedupeByNormalized([...(dbData.quotes || []), ...localQuotes]);
 
     return { authors, quotes };
@@ -151,28 +159,45 @@ export const AdminPanel: React.FC = () => {
       // 1. Coleta autoras já usadas para enviar como exclusão (banco + memória)
       const { authors: excludeAuthors, quotes: excludeQuotes } = await buildGlobalExclusions();
 
-      // 2. Gera com IA passando as exclusões para evitar repetição
-      let newQuote = await fetchDailyInspiration(excludeAuthors, excludeQuotes);
+      const maxAttempts = 5;
+      let attempt = 0;
+      let storedQuote: InspirationQuote | null = null;
 
-      // 3. Se ainda assim vier repetida, tenta novamente com listas expandidas
-      let retries = 0;
-      while (isDuplicateQuote(newQuote, excludeAuthors, excludeQuotes) && retries < 2) {
-        excludeAuthors.push(newQuote.author);
-        excludeQuotes.push(newQuote.quote);
-        newQuote = await fetchDailyInspiration(excludeAuthors, excludeQuotes);
-        retries += 1;
+      while (attempt < maxAttempts && !storedQuote) {
+        const candidate = await fetchDailyInspiration(excludeAuthors, excludeQuotes);
+
+        const isDuplicate = isDuplicateQuote(candidate, excludeAuthors, excludeQuotes);
+        if (isDuplicate) {
+          excludeAuthors.push(candidate.author);
+          excludeQuotes.push(candidate.quote);
+          attempt += 1;
+          continue;
+        }
+
+        try {
+          await updateQueueItem(date, 'draft', candidate);
+          storedQuote = candidate;
+        } catch (error) {
+          if (error instanceof DuplicateQuoteError) {
+            excludeQuotes.push(candidate.quote);
+            attempt += 1;
+            continue;
+          }
+          throw error;
+        }
       }
 
-      // 4. Salva no Supabase
-      await updateQueueItem(date, 'draft', newQuote);
+      if (!storedQuote) {
+        throw new Error('Não foi possível gerar uma frase inédita após múltiplas tentativas.');
+      }
 
-      // 5. Atualiza estado local para refletir mudança instantaneamente
+      // 4. Atualiza estado local para refletir mudança instantaneamente
       setQueue(prev => ({
         ...prev,
         [dateKey]: {
           date: dateKey,
           status: 'draft',
-          data: newQuote
+          data: storedQuote
         }
       }));
     } catch (error) {

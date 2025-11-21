@@ -7,6 +7,24 @@ const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZ
 
 const supabase = createClient(SUPABASE_URL, SUPABASE_KEY);
 
+const normalize = (text?: string | null): string =>
+  (text || "")
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/\p{Diacritic}/gu, '')
+    .replace(/\s+/g, ' ')
+    .trim();
+
+export class DuplicateQuoteError extends Error {
+  existingDate?: string;
+
+  constructor(message: string, existingDate?: string) {
+    super(message);
+    this.name = 'DuplicateQuoteError';
+    this.existingDate = existingDate;
+  }
+}
+
 export const getAllUsedQuotes = async (): Promise<{ authors: string[]; quotes: string[] }> => {
   try {
     const { data, error } = await supabase
@@ -20,10 +38,22 @@ export const getAllUsedQuotes = async (): Promise<{ authors: string[]; quotes: s
 
     const authors: string[] = [];
     const quotes: string[] = [];
+    const seenAuthors = new Set<string>();
+    const seenQuotes = new Set<string>();
 
     (data || []).forEach((row: any) => {
-      if (row?.data?.author) authors.push(row.data.author);
-      if (row?.data?.quote) quotes.push(row.data.quote);
+      const normalizedAuthor = normalize(row?.data?.author);
+      const normalizedQuote = normalize(row?.data?.quote);
+
+      if (row?.data?.author && normalizedAuthor && !seenAuthors.has(normalizedAuthor)) {
+        seenAuthors.add(normalizedAuthor);
+        authors.push(row.data.author);
+      }
+
+      if (row?.data?.quote && normalizedQuote && !seenQuotes.has(normalizedQuote)) {
+        seenQuotes.add(normalizedQuote);
+        quotes.push(row.data.quote);
+      }
     });
 
     return { authors, quotes };
@@ -95,9 +125,39 @@ export const getQuoteForDate = async (date: Date): Promise<InspirationQuote | nu
   }
 };
 
+const ensureUniqueQuoteInDatabase = async (quote: string, currentDateKey: string) => {
+  const target = normalize(quote);
+  if (!target) return;
+
+  try {
+    const { data, error } = await supabase
+      .from('quotes_queue')
+      .select('date, data');
+
+    if (error) {
+      console.error('Erro ao validar duplicidade no Supabase:', error);
+      return;
+    }
+
+    const conflict = (data || []).find((row: any) => {
+      const normalizedQuote = normalize(row?.data?.quote);
+      return row?.date !== currentDateKey && normalizedQuote && normalizedQuote === target;
+    });
+
+    if (conflict) {
+      throw new DuplicateQuoteError('Frase já existe no banco', conflict.date);
+    }
+  } catch (e) {
+    if (e instanceof DuplicateQuoteError) {
+      throw e;
+    }
+    console.error('Erro inesperado ao checar duplicidade:', e);
+  }
+};
+
 export const updateQueueItem = async (date: Date, status: QuoteStatus, data?: InspirationQuote) => {
   const key = formatDateKey(date);
-  
+
   const payload = {
     date: key,
     status: status,
@@ -105,6 +165,10 @@ export const updateQueueItem = async (date: Date, status: QuoteStatus, data?: In
   };
 
   try {
+    if (data?.quote) {
+      await ensureUniqueQuoteInDatabase(data.quote, key);
+    }
+
     const { error } = await supabase
       .from('quotes_queue')
       .upsert(payload);

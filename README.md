@@ -36,5 +36,7 @@ O app agora usa a API do ChatGPT (OpenAI) para gerar e narrar as frases. A chave
 _Dica rápida_: variáveis criadas em **Preview** não entram no build de **Production**. Verifique se está na aba certa.
 
 ## Evitando frases repetidas
-- Antes de gerar uma nova frase, o painel Admin agora lê todas as citações existentes no Supabase (agendadas, pendentes ou aprovadas) e envia essa lista como exclusão para a IA.
+- Antes de gerar uma nova frase, o painel Admin agora lê todas as citações existentes no Supabase (agendadas, pendentes ou aprovadas) e envia essa lista ampliada (até 200 itens) como exclusão para a IA.
+- O modelo foi ajustado para criar frases **originais** assinadas pela autora fixa **JURO**, reduzindo colisões de autoras conhecidas.
+- Existe uma checagem final no Supabase: se a frase gerada já existir em qualquer data, o salvamento é bloqueado e uma nova geração é tentada automaticamente.
 - Se mesmo assim a resposta vier duplicada, o app tenta novas gerações com listas expandidas e só salva quando encontra uma frase inédita.
