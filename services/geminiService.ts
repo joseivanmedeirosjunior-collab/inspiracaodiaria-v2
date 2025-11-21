@@ -3,7 +3,7 @@ import { InspirationQuote } from "../types";
 
 export const fetchDailyInspiration = async (excludeAuthors: string[] = []): Promise<InspirationQuote> => {
   // Initialize client with process.env.API_KEY as per guidelines
-  const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+  const ai = new GoogleGenAI({ apiKey: process.env.AIzaSyCZomq2mjDpLPaYn7k6SpQMEQEYhgELCDQ });
 
   const modelId = "gemini-2.5-flash";
   
