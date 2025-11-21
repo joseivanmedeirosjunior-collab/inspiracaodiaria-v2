@@ -360,13 +360,15 @@ export const fetchQuoteAudio = async (text: string): Promise<string | null> => {
   if (geminiKey) {
     try {
       const ai = new GoogleGenAI({ apiKey: geminiKey });
-      const response = await (ai.models as any).generateContent({
+      const response = await ai.models.generateContent({
         model: GEMINI_TTS_MODEL,
         contents: [{ role: "user", parts: [{ text }] }],
-        generationConfig: {
-          responseMimeType: "audio/mp3",
-          voiceConfig: {
-            prebuiltVoiceConfig: { voiceName: "Kore" },
+        config: {
+          responseModalities: ["AUDIO"],
+          speechConfig: {
+            voiceConfig: {
+              prebuiltVoiceConfig: { voiceName: "Kore" },
+            },
           },
         },
       });
