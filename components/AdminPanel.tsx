@@ -79,8 +79,10 @@ export const AdminPanel: React.FC = () => {
   const handleLogin = (e: React.FormEvent) => {
     e.preventDefault();
     
-    // Busca senha do Cloudflare ou usa 'admin' como fallback temporário
-    const correctPassword = import.meta.env.VITE_ADMIN_PASSWORD || 'admin';
+    // Busca senha do Cloudflare de forma segura
+    // Usa optional chaining (?.) para evitar erro se import.meta.env for undefined
+    const envPassword = import.meta.env?.VITE_ADMIN_PASSWORD;
+    const correctPassword = envPassword || 'admin';
 
     // Comparação exata (sem toLowerCase para permitir senhas fortes)
     if (password === correctPassword) {

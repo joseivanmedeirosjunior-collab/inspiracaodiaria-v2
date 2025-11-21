@@ -6,7 +6,7 @@ import { AdminPanel } from './components/AdminPanel';
 import { fetchDailyInspiration } from './services/geminiService';
 import { getQuoteForDate } from './services/queueService';
 import { InspirationQuote, DailyData } from './types';
-import { Sparkles } from 'lucide-react';
+import { Sparkles, AlertTriangle } from 'lucide-react';
 
 const LOCAL_STORAGE_KEY = 'juro_daily_inspiration_v1';
 
@@ -17,8 +17,8 @@ export default function App() {
   // App State
   const [quoteData, setQuoteData] = useState<InspirationQuote | null>(null);
   const [loading, setLoading] = useState<boolean>(true);
+  const [error, setError] = useState<string | null>(null); // Novo estado de erro
   const [currentDateString, setCurrentDateString] = useState<string>('');
-  // Armazena o objeto Date da frase atual para passar ao sistema de reações
   const [quoteDate, setQuoteDate] = useState<Date>(new Date());
 
   // Handle Hash Change (Routing)
@@ -43,6 +43,7 @@ export default function App() {
     
     setCurrentDateString(formattedDate);
     setLoading(true);
+    setError(null); // Limpa erros anteriores
 
     try {
       // 1. Tenta pegar frase APROVADA pelo admin no Supabase
@@ -83,11 +84,14 @@ export default function App() {
           };
           localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(dataToStore));
         } catch (err: any) {
-          throw err;
+          console.error("Erro no fetch:", err);
+          // Define a mensagem de erro para mostrar na tela
+          setError(err.message || "Não foi possível carregar a frase de hoje.");
         }
       }
-    } catch (error) {
+    } catch (error: any) {
       console.error("Failed to load daily quote", error);
+      setError("Erro inesperado ao carregar o aplicativo.");
     } finally {
       setLoading(false);
     }
@@ -130,7 +134,37 @@ export default function App() {
         </div>
 
         <div className="container mx-auto flex justify-center">
-            <QuoteCard data={quoteData} loading={loading} date={quoteDate} />
+            {error ? (
+              <div className="bg-red-50 border border-red-200 rounded-2xl p-8 max-w-lg text-center shadow-sm">
+                <div className="flex justify-center mb-4 text-red-400">
+                  <AlertTriangle size={48} />
+                </div>
+                <h3 className="text-xl font-bold text-red-600 mb-2">Atenção: Erro de Configuração</h3>
+                <p className="text-gray-800 font-medium mb-4">{error}</p>
+                
+                {error.includes('bloqueada') && (
+                    <div className="text-sm text-gray-600 bg-white p-4 rounded-lg border border-red-100 text-left">
+                        <strong>O que fazer:</strong>
+                        <ol className="list-decimal ml-4 mt-2 space-y-1">
+                            <li>Acesse o <a href="https://aistudio.google.com/app/apikey" target="_blank" className="underline text-blue-600">Google AI Studio</a>.</li>
+                            <li>Exclua a chave antiga e crie uma nova.</li>
+                            <li>Vá no Cloudflare Pages &gt; Settings &gt; Environment Variables.</li>
+                            <li>Atualize a variável <code>VITE_API_KEY</code>.</li>
+                            <li>Faça um "Retry Deployment" no Cloudflare.</li>
+                        </ol>
+                    </div>
+                )}
+                
+                <button 
+                  onClick={() => window.location.reload()}
+                  className="mt-6 px-6 py-2 bg-red-500 text-white rounded-lg hover:bg-red-600 transition-colors font-bold"
+                >
+                  Tentar Novamente
+                </button>
+              </div>
+            ) : (
+              <QuoteCard data={quoteData} loading={loading} date={quoteDate} />
+            )}
         </div>
       </main>
 

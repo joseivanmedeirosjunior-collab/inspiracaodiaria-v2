@@ -3,7 +3,7 @@ import { InspirationQuote } from "../types";
 
 // Helper para obter a chave de API de forma segura
 const getApiKey = (): string | undefined => {
-  // Tenta ler do Vite (Cloudflare)
+  // Tenta ler do Vite (Cloudflare) usando optional chaining
   if (typeof import.meta !== 'undefined' && import.meta.env && import.meta.env.VITE_API_KEY) {
     return import.meta.env.VITE_API_KEY;
   }
@@ -85,9 +85,16 @@ export const fetchDailyInspiration = async (excludeAuthors: string[] = []): Prom
 
     return JSON.parse(jsonText) as InspirationQuote;
 
-  } catch (error) {
+  } catch (error: any) {
     console.error("Erro Gemini:", error);
-    // Fallback seguro
+    const errorMsg = JSON.stringify(error);
+
+    // Detecção específica de Chave Vazada/Bloqueada
+    if (errorMsg.includes("leaked") || errorMsg.includes("PERMISSION_DENIED") || errorMsg.includes("403")) {
+        throw new Error("⚠️ A chave de API foi bloqueada pelo Google (vazamento detectado). Por favor, gere uma nova chave no AI Studio e atualize no Cloudflare.");
+    }
+
+    // Fallback seguro apenas para outros erros (timeout, rede temporária)
     return {
       quote: "Pés, para que os quero, se tenho asas para voar?",
       author: "Frida Kahlo",
@@ -116,8 +123,12 @@ export const fetchQuoteAudio = async (text: string): Promise<string | null> => {
     });
 
     return response.candidates?.[0]?.content?.parts?.[0]?.inlineData?.data || null;
-  } catch (error) {
+  } catch (error: any) {
     console.error("Erro Audio:", error);
+    const errorMsg = JSON.stringify(error);
+    if (errorMsg.includes("leaked") || errorMsg.includes("403")) {
+        console.error("CRÍTICO: Chave de API vazada bloqueou o áudio.");
+    }
     return null;
   }
 };
