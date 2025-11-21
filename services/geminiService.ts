@@ -111,13 +111,37 @@ export const fetchDailyInspiration = async (excludeAuthors: string[] = []): Prom
 
   } catch (error) {
     console.error("Erro Gemini:", error);
-    // Fallback seguro
-    return {
-      quote: "Pés, para que os quero, se tenho asas para voar?",
-      author: "Frida Kahlo",
-      role: "Pintora",
-      country: "México"
-    };
+
+    // Fallback seguro com variação para mostrar mudança a cada clique mesmo sem API
+    const fallbackPool: InspirationQuote[] = [
+      {
+        quote: "Pés, para que os quero, se tenho asas para voar?",
+        author: "Frida Kahlo",
+        role: "Pintora",
+        country: "México"
+      },
+      {
+        quote: "Eu sou feita de cicatrizes, mas caminho com elegância.",
+        author: "Conceição Evaristo",
+        role: "Escritora",
+        country: "Brasil"
+      },
+      {
+        quote: "Ninguém pode fazer você se sentir inferior sem o seu consentimento.",
+        author: "Eleanor Roosevelt",
+        role: "Diplomata",
+        country: "Estados Unidos"
+      },
+      {
+        quote: "A liberdade é uma luta constante, mas a vitória é doce.",
+        author: "Angela Davis",
+        role: "Filósofa",
+        country: "Estados Unidos"
+      },
+    ];
+
+    const fallbackQuote = fallbackPool[Math.floor(Math.random() * fallbackPool.length)];
+    return fallbackQuote;
   }
 };
 
@@ -134,7 +158,8 @@ export const fetchQuoteAudio = async (text: string): Promise<string | null> => {
       config: {
         responseModalities: [Modality.AUDIO],
         speechConfig: {
-          voiceConfig: { prebuiltVoiceConfig: { voiceName: 'Kore' } },
+          // Voz feminina suave para uma leitura mais natural
+          voiceConfig: { prebuiltVoiceConfig: { voiceName: 'Luna' } },
         },
       },
     });
