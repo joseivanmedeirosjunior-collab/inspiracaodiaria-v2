@@ -1,11 +1,11 @@
 import React, { useEffect, useState, useCallback } from 'react';
-import { Header } from './components/Header';
-import { Footer } from './components/Footer';
-import { QuoteCard } from './components/QuoteCard';
-import { AdminPanel } from './components/AdminPanel';
-import { fetchDailyInspiration } from './services/geminiService';
-import { getQuoteForDate } from './services/queueService';
-import { InspirationQuote, DailyData } from './types';
+import { Header } from '../components/Header';
+import { Footer } from '../components/Footer';
+import { QuoteCard } from '../components/QuoteCard';
+import { AdminPanel } from '../components/AdminPanel';
+import { fetchDailyInspiration } from '../services/geminiService';
+import { getQuoteForDate } from '../services/queueService';
+import { InspirationQuote, DailyData } from '../types';
 import { Sparkles, AlertTriangle } from 'lucide-react';
 
 const LOCAL_STORAGE_KEY = 'juro_daily_inspiration_v1';
