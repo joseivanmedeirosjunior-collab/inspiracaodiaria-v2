@@ -27,17 +27,18 @@ View your app in AI Studio: https://ai.studio/apps/drive/15c-DOz5jh9HyHFkRvPVLC3
 - Os erros `Cannot find module './components/Header'` etc. ocorreram porque o `src/App.tsx` importava componentes e serviços em caminhos relativos errados; foram corrigidos para apontar para `../components`, `../services` e `../types`, e o build (`npm run build`) agora completa com sucesso.
 
 ## Usando a VITE_OPENAI_API_KEY no Cloudflare Pages (passo a passo simples)
-O app agora usa a API do ChatGPT (OpenAI) para gerar e narrar as frases. A chave precisa ser "queimada" no código durante o build. Para garantir isso:
+O app usa a API do ChatGPT (OpenAI) para gerar as frases e, agora, o áudio principal vem do Gemini TTS. As chaves precisam ser "queimadas" no código durante o build. Para garantir isso:
 
 1) Abra **Cloudflare Pages → seu projeto → Settings → Environment Variables**. Em **Production**, crie (ou confirme) o item **Nome: `VITE_OPENAI_API_KEY` / Tipo: Secret / Valor: sua chave OpenAI**. Se preferir, mantenha também `VITE_API_KEY` como alias.
-2) Clique em **Deployments → Redeploy** ("Redeploy latest") para forçar um build novo já com a chave.
-3) Depois do deploy, teste o painel Admin. Se o botão "Gerar" não responder, abra o console do navegador: se aparecer `OpenAI API Key não encontrada`, a variável não chegou ao build (repita os passos 1 e 2).
+2) Ainda em **Production**, defina **`VITE_API_KEY`** (ou `VITE_GEMINI_API_KEY`) com sua chave do Gemini; isso habilita a voz **Kore** no TTS.
+3) Clique em **Deployments → Redeploy** ("Redeploy latest") para forçar um build novo já com as chaves.
+4) Depois do deploy, teste o painel Admin. Se o botão "Gerar" não responder, abra o console do navegador: se aparecer `OpenAI API Key não encontrada`, a variável não chegou ao build (repita os passos 1 a 3).
 
 _Dica rápida_: variáveis criadas em **Preview** não entram no build de **Production**. Verifique se está na aba certa.
 
 ### Voz do botão "Ouvir"
-- A síntese de áudio usa o endpoint `/audio/speech` com o modelo `gpt-4o-mini-tts` e voz `shimmer` (feminina, mais natural/empolgante).
-- Se a chamada falhar ou a chave estiver bloqueada, o app cai para a voz nativa do navegador (SpeechSynthesis) mantendo a reprodução.
+- A voz principal agora é a **Kore** (feminina, calma e natural) usando o modelo **`gemini-2.5-flash-preview-tts`**. É preciso ter `VITE_API_KEY`/`VITE_GEMINI_API_KEY` configurada.
+- Se o Gemini TTS não estiver configurado ou falhar, o app tenta o OpenAI TTS (`gpt-4o-mini-tts`, voz `shimmer`). Persistindo o erro, cai para a voz nativa do navegador (SpeechSynthesis) para não quebrar a reprodução.
 
 ### Se aparecer 429 / "insufficient_quota"
 - A mensagem vem da OpenAI quando a chave usada não tem créditos liberados, mesmo que a conta mostre saldo (ex.: chave criada em projeto sem billing ativo ou com limite bloqueado).

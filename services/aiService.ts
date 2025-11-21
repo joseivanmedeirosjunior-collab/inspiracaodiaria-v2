@@ -1,7 +1,32 @@
+import { GoogleGenAI } from "@google/genai";
+
 import { InspirationQuote } from "../types";
 
 const OPENAI_API_URL = "https://api.openai.com/v1";
 const DEFAULT_AUTHOR = "JURO";
+const GEMINI_TTS_MODEL = "gemini-2.5-flash-preview-tts";
+
+const decodeBase64Audio = (
+  base64: string | undefined,
+  mimeType: string = "audio/mpeg"
+): string | null => {
+  if (!base64) return null;
+
+  try {
+    const binary = atob(base64);
+    const bytes = new Uint8Array(binary.length);
+
+    for (let i = 0; i < binary.length; i++) {
+      bytes[i] = binary.charCodeAt(i);
+    }
+
+    const blob = new Blob([bytes], { type: mimeType });
+    return URL.createObjectURL(blob);
+  } catch (error) {
+    console.error("Falha ao decodificar áudio base64", error);
+    return null;
+  }
+};
 
 let quotaTemporarilyBlocked = false;
 let lastQuotaBlockAt: number | null = null;
@@ -56,6 +81,27 @@ const getApiKey = (): string | undefined => {
 
   if (typeof process !== "undefined") {
     const processKey = process.env?.VITE_OPENAI_API_KEY || process.env?.OPENAI_API_KEY || process.env?.VITE_API_KEY;
+    if (!isPlaceholder(processKey)) return processKey;
+  }
+
+  return undefined;
+};
+
+const getGeminiApiKey = (): string | undefined => {
+  if (typeof import.meta !== "undefined") {
+    const inlineKey =
+      import.meta.env?.VITE_API_KEY ||
+      import.meta.env?.VITE_GEMINI_API_KEY ||
+      import.meta.env?.GEMINI_API_KEY;
+    if (!isPlaceholder(inlineKey)) return inlineKey;
+  }
+
+  if (typeof process !== "undefined") {
+    const processKey =
+      process.env?.VITE_API_KEY ||
+      process.env?.VITE_GEMINI_API_KEY ||
+      process.env?.GEMINI_API_KEY ||
+      process.env?.GOOGLE_API_KEY;
     if (!isPlaceholder(processKey)) return processKey;
   }
 
@@ -307,9 +353,45 @@ export const fetchDailyInspiration = async (
 };
 
 export const fetchQuoteAudio = async (text: string): Promise<string | null> => {
-  const apiKey = getApiKey();
   refreshQuotaBlockIfExpired();
 
+  // 1) Tenta primeiro com Gemini (voz Kore)
+  const geminiKey = getGeminiApiKey();
+  if (geminiKey) {
+    try {
+      const ai = new GoogleGenAI({ apiKey: geminiKey });
+      const response = await ai.models.generateContent({
+        model: GEMINI_TTS_MODEL,
+        contents: [{ role: "user", parts: [{ text }] }],
+        config: {
+          responseMimeType: "audio/mpeg",
+          speechConfig: {
+            voiceConfig: {
+              prebuiltVoiceConfig: { voiceName: "Kore" },
+            },
+          },
+        },
+      });
+
+      const inlineData = response?.candidates?.[0]?.content?.parts?.find(
+        (part: any) => part?.inlineData?.data
+      )?.inlineData;
+
+      const audioUrl = decodeBase64Audio(
+        inlineData?.data,
+        inlineData?.mimeType || "audio/mpeg"
+      );
+
+      if (audioUrl) {
+        return audioUrl;
+      }
+    } catch (error) {
+      console.error("Erro Gemini (áudio):", error);
+    }
+  }
+
+  // 2) Fallback para OpenAI TTS, se configurado e sem bloqueio
+  const apiKey = getApiKey();
   if (!apiKey || quotaTemporarilyBlocked) return null;
 
   try {
@@ -322,7 +404,7 @@ export const fetchQuoteAudio = async (text: string): Promise<string | null> => {
       body: JSON.stringify({
         model: "gpt-4o-mini-tts",
         input: text,
-        voice: "shimmer", // voz feminina mais natural/empolgante
+        voice: "shimmer", // fallback empolgante caso Gemini falhe
         response_format: "mp3",
       }),
     });
