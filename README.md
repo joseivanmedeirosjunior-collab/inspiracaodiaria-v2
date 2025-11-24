@@ -31,7 +31,7 @@ O app usa a API do ChatGPT (OpenAI) para gerar as frases e sintetiza o áudio ap
 
 1) Abra **Cloudflare Pages → seu projeto → Settings → Environment Variables**. Em **Production**, crie (ou confirme) o item **Nome: `VITE_OPENAI_API_KEY` / Tipo: Secret / Valor: sua chave OpenAI**. Se preferir, mantenha também `VITE_API_KEY` como alias.
 2) Ainda em **Production**, defina **`VITE_ELEVENLABS_API_KEY`** (Secret) para habilitar a voz Rachel da ElevenLabs. Opcionalmente você pode definir **`VITE_ELEVENLABS_VOICE_ID`** para usar outra voz.
-3) Clique em **Deployments → Redeploy** ("Redeploy latest") para forçar um build novo já com as chaves.
+3) Clique em **Deployments → Redeploy** ("Redeploy latest") para forçar um build novo já com as chaves. Se você preferir injetar a chave só em tempo de execução (sem rebuild), pode expor um objeto global `window.__ENV__ = { VITE_ELEVENLABS_API_KEY: "..." }` via script HTML: o app vai detectar essa chave automaticamente.
 4) Depois do deploy, teste o painel Admin. Se o botão "Gerar" não responder, abra o console do navegador: se aparecer `OpenAI API Key não encontrada`, a variável não chegou ao build (repita os passos 1 a 3).
 
 _Dica rápida_: variáveis criadas em **Preview** não entram no build de **Production**. Verifique se está na aba certa.

@@ -290,7 +290,9 @@ export const QuoteCard: React.FC<QuoteCardProps> = ({ data, loading, date }) => 
 
         {!isAudioConfigured && (
           <span className="text-xs text-gray-400 text-center sm:text-left">
-            Configure <code className="font-semibold">VITE_ELEVENLABS_API_KEY</code> no build para habilitar o áudio.
+            Defina <code className="font-semibold">VITE_ELEVENLABS_API_KEY</code> em Settings → Environment Variables
+            (Production) do Cloudflare Pages e publique novamente. O app também aceita a chave exposta em
+            <code className="font-semibold">window.__ENV__.VITE_ELEVENLABS_API_KEY</code>.
           </span>
         )}
 

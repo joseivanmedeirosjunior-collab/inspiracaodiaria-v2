@@ -74,6 +74,18 @@ const getElevenLabsApiKey = (): string | undefined => {
     if (normalizedInline) return normalizedInline;
   }
 
+  // Permitimos injeção em tempo de execução (ex.: script global em Cloudflare Pages)
+  if (typeof window !== "undefined") {
+    const runtimeEnv = (window as any).__ENV__ || (window as any).__env__ || (window as any);
+    const runtimeKey =
+      runtimeEnv?.VITE_ELEVENLABS_API_KEY ||
+      runtimeEnv?.ELEVENLABS_API_KEY ||
+      runtimeEnv?.ELEVENLABS_KEY;
+
+    const normalizedRuntime = normalizeKey(runtimeKey);
+    if (normalizedRuntime) return normalizedRuntime;
+  }
+
   if (typeof process !== "undefined") {
     const processKey =
       process.env?.VITE_ELEVENLABS_API_KEY || process.env?.ELEVENLABS_API_KEY;
