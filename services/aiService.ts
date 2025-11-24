@@ -437,12 +437,8 @@ export const fetchQuoteAudio = async (text: string): Promise<string | null> => {
         model: GEMINI_TTS_MODEL,
         contents: [{ role: "user", parts: [{ text }] }],
         generationConfig: {
+          // A prévia do Gemini TTS não aceita configuração de voz; usa o padrão do modelo.
           responseMimeType: "audio/mp3",
-          speechConfig: {
-            voiceConfig: {
-              prebuiltVoiceConfig: { voiceName: "Kore" },
-            },
-          },
         },
       };
 
