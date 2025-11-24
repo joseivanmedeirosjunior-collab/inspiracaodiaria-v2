@@ -1,36 +1,13 @@
-import { GoogleGenAI } from "@google/genai";
-
 import { InspirationQuote } from "../types";
 
 const OPENAI_API_URL = "https://api.openai.com/v1";
 const DEFAULT_AUTHOR = "JURO";
-const GEMINI_TTS_MODEL = "gemini-2.5-flash-preview-tts";
-
-const decodeBase64Audio = (
-  base64: string | undefined,
-  mimeType: string = "audio/mpeg"
-): string | null => {
-  if (!base64) return null;
-
-  try {
-    const binary = atob(base64);
-    const bytes = new Uint8Array(binary.length);
-
-    for (let i = 0; i < binary.length; i++) {
-      bytes[i] = binary.charCodeAt(i);
-    }
-
-    const blob = new Blob([bytes], { type: mimeType });
-    return URL.createObjectURL(blob);
-  } catch (error) {
-    console.error("Falha ao decodificar áudio base64", error);
-    return null;
-  }
-};
+const DEFAULT_ELEVENLABS_VOICE_ID = "21m00Tcm4TlvDq8ikWAM"; // Rachel
 
 let quotaTemporarilyBlocked = false;
 let lastQuotaBlockAt: number | null = null;
 const QUOTA_COOLDOWN_MS = 10 * 60 * 1000; // 10 minutos
+let hasWarnedMissingElevenLabsKey = false;
 
 export const isQuotaBlocked = () => {
   refreshQuotaBlockIfExpired();
@@ -87,25 +64,55 @@ const getApiKey = (): string | undefined => {
   return undefined;
 };
 
-const getGeminiApiKey = (): string | undefined => {
+const getElevenLabsApiKey = (): string | undefined => {
+  const normalizeKey = (value?: string) => value?.trim() || undefined;
+
   if (typeof import.meta !== "undefined") {
     const inlineKey =
-      import.meta.env?.VITE_API_KEY ||
-      import.meta.env?.VITE_GEMINI_API_KEY ||
-      import.meta.env?.GEMINI_API_KEY;
-    if (!isPlaceholder(inlineKey)) return inlineKey;
+      import.meta.env?.VITE_ELEVENLABS_API_KEY || import.meta.env?.ELEVENLABS_API_KEY;
+    const normalizedInline = normalizeKey(inlineKey);
+    if (normalizedInline) return normalizedInline;
+  }
+
+  // Permitimos injeção em tempo de execução (ex.: script global em Cloudflare Pages)
+  if (typeof window !== "undefined") {
+    const runtimeEnv = (window as any).__ENV__ || (window as any).__env__ || (window as any);
+    const runtimeKey =
+      runtimeEnv?.VITE_ELEVENLABS_API_KEY ||
+      runtimeEnv?.ELEVENLABS_API_KEY ||
+      runtimeEnv?.ELEVENLABS_KEY;
+
+    const normalizedRuntime = normalizeKey(runtimeKey);
+    if (normalizedRuntime) return normalizedRuntime;
   }
 
   if (typeof process !== "undefined") {
     const processKey =
-      process.env?.VITE_API_KEY ||
-      process.env?.VITE_GEMINI_API_KEY ||
-      process.env?.GEMINI_API_KEY ||
-      process.env?.GOOGLE_API_KEY;
-    if (!isPlaceholder(processKey)) return processKey;
+      process.env?.VITE_ELEVENLABS_API_KEY || process.env?.ELEVENLABS_API_KEY;
+    const normalizedProcess = normalizeKey(processKey);
+    if (normalizedProcess) return normalizedProcess;
   }
 
   return undefined;
+};
+
+export const isElevenLabsConfigured = (): boolean => {
+  return !!getElevenLabsApiKey();
+};
+
+const getElevenLabsVoiceId = (): string => {
+  if (typeof import.meta !== "undefined") {
+    const inlineVoice = import.meta.env?.VITE_ELEVENLABS_VOICE_ID;
+    if (inlineVoice && !isPlaceholder(inlineVoice)) return inlineVoice;
+  }
+
+  if (typeof process !== "undefined") {
+    const processVoice =
+      process.env?.VITE_ELEVENLABS_VOICE_ID || process.env?.ELEVENLABS_VOICE_ID;
+    if (processVoice && !isPlaceholder(processVoice)) return processVoice;
+  }
+
+  return DEFAULT_ELEVENLABS_VOICE_ID;
 };
 
 export const isOpenAIApiConfigured = (): boolean => !!getApiKey();
@@ -355,42 +362,54 @@ export const fetchDailyInspiration = async (
 export const fetchQuoteAudio = async (text: string): Promise<string | null> => {
   refreshQuotaBlockIfExpired();
 
-  // Tenta apenas com Gemini (voz Kore)
-  const geminiKey = getGeminiApiKey();
-  if (geminiKey) {
-    try {
-      const ai = new GoogleGenAI({ apiKey: geminiKey });
-      const request: any = {
-        model: GEMINI_TTS_MODEL,
-        contents: [{ role: "user", parts: [{ text }] }],
-        generationConfig: {
-          responseMimeType: "audio/mp3",
-          speechConfig: {
-            voiceConfig: {
-              prebuiltVoiceConfig: { voiceName: "Kore" },
-            },
-          },
-        },
-      };
-
-      const response = await ai.models.generateContent(request);
-
-      const inlineData = response?.candidates?.[0]?.content?.parts?.find(
-        (part: any) => part?.inlineData?.data
-      )?.inlineData;
-
-      const audioUrl = decodeBase64Audio(
-        inlineData?.data,
-        inlineData?.mimeType || "audio/mpeg"
+  const elevenApiKey = getElevenLabsApiKey();
+  if (!elevenApiKey) {
+    if (!hasWarnedMissingElevenLabsKey) {
+      console.warn(
+        "Chave da ElevenLabs não configurada; áudio indisponível. Configure a variável VITE_ELEVENLABS_API_KEY no ambiente de build."
       );
-
-      if (audioUrl) {
-        return audioUrl;
-      }
-    } catch (error) {
-      console.error("Erro Gemini (áudio):", error);
+      hasWarnedMissingElevenLabsKey = true;
     }
+    return null;
   }
 
-  return null;
+  try {
+    const voiceId = getElevenLabsVoiceId();
+    const response = await fetch(
+      `https://api.elevenlabs.io/v1/text-to-speech/${voiceId}`,
+      {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Accept: "audio/mpeg",
+          "xi-api-key": elevenApiKey,
+        },
+        body: JSON.stringify({
+          text,
+          model_id: "eleven_multilingual_v2",
+          voice_settings: {
+            stability: 0.4,
+            similarity_boost: 0.8,
+            style: 0.4,
+            use_speaker_boost: true,
+          },
+        }),
+      }
+    );
+
+    if (!response.ok) {
+      const errorText = await response.text();
+      console.error(
+        `Erro ElevenLabs (status ${response.status}): ${errorText || response.statusText}`
+      );
+      return null;
+    }
+
+    const audioBlob = await response.blob();
+    const audioUrl = URL.createObjectURL(audioBlob);
+    return audioUrl;
+  } catch (error) {
+    console.error("Erro ElevenLabs (áudio):", error);
+    return null;
+  }
 };

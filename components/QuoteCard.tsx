@@ -1,7 +1,7 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { Share2, Quote, Copy, Check, Volume2, StopCircle, Loader2, Heart, Zap, Star } from 'lucide-react';
 import { InspirationQuote, ReactionCounts, ReactionType } from '../types';
-import { fetchQuoteAudio } from '../services/aiService';
+import { fetchQuoteAudio, isElevenLabsConfigured } from '../services/aiService';
 import { registerReaction, getReactions, formatDateKey } from '../services/queueService';
 
 interface QuoteCardProps {
@@ -17,6 +17,7 @@ export const QuoteCard: React.FC<QuoteCardProps> = ({ data, loading, date }) => 
   const [isSpeaking, setIsSpeaking] = useState(false);
   const [isLoadingAudio, setIsLoadingAudio] = useState(false);
   const [audioCache, setAudioCache] = useState<string | null>(null);
+  const [isAudioConfigured] = useState(() => isElevenLabsConfigured());
   
   // Estados de Reação
   const [reactions, setReactions] = useState<ReactionCounts>({ love: 0, power: 0, sad: 0 });
@@ -89,6 +90,13 @@ export const QuoteCard: React.FC<QuoteCardProps> = ({ data, loading, date }) => 
   const handleSpeak = async () => {
     if (!data) return;
 
+    if (!isAudioConfigured) {
+      console.warn(
+        "Áudio indisponível: configure a variável VITE_ELEVENLABS_API_KEY no ambiente de build para habilitar o ElevenLabs."
+      );
+      return;
+    }
+
     if (isSpeaking) {
       stopAudio();
       return;
@@ -112,7 +120,7 @@ export const QuoteCard: React.FC<QuoteCardProps> = ({ data, loading, date }) => 
         await playAudio(audioUrl);
         return;
       }
-      console.warn("Áudio não disponível: a voz Kore do Gemini não pôde ser carregada.");
+      console.warn("Áudio não disponível: não foi possível carregar o áudio da ElevenLabs.");
     } catch (error) {
       console.error("Falha ao obter áudio", error);
     } finally {
@@ -257,13 +265,15 @@ export const QuoteCard: React.FC<QuoteCardProps> = ({ data, loading, date }) => 
       <div className="flex flex-col sm:flex-row gap-3 w-full sm:w-auto items-center justify-center flex-wrap">
         <button
           onClick={handleSpeak}
-          disabled={isLoadingAudio}
+          disabled={isLoadingAudio || !isAudioConfigured}
           className={`w-full sm:w-auto group flex items-center justify-center gap-2.5 px-6 py-3.5 rounded-2xl font-semibold transition-all shadow-sm active:scale-95 border whitespace-nowrap ${
             isSpeaking
               ? 'bg-red-50 text-red-500 border-red-100'
-              : isLoadingAudio 
+              : isLoadingAudio
                 ? 'bg-gray-50 text-gray-400 border-gray-100 cursor-wait'
-                : 'bg-juro-bg text-juro-primary border-juro-secondary hover:bg-juro-secondary/30'
+                : !isAudioConfigured
+                  ? 'bg-gray-50 text-gray-300 border-gray-100 cursor-not-allowed'
+                  : 'bg-juro-bg text-juro-primary border-juro-secondary hover:bg-juro-secondary/30'
           }`}
         >
           {isLoadingAudio ? (
@@ -277,6 +287,14 @@ export const QuoteCard: React.FC<QuoteCardProps> = ({ data, loading, date }) => 
             {isLoadingAudio ? 'Gerando...' : isSpeaking ? 'Parar' : 'Ouvir'}
           </span>
         </button>
+
+        {!isAudioConfigured && (
+          <span className="text-xs text-gray-400 text-center sm:text-left">
+            Defina <code className="font-semibold">VITE_ELEVENLABS_API_KEY</code> em Settings → Environment Variables
+            (Production) do Cloudflare Pages e publique novamente. O app também aceita a chave exposta em
+            <code className="font-semibold">window.__ENV__.VITE_ELEVENLABS_API_KEY</code>.
+          </span>
+        )}
 
         <button
           onClick={handleShare}
