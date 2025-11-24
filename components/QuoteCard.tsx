@@ -112,7 +112,7 @@ export const QuoteCard: React.FC<QuoteCardProps> = ({ data, loading, date }) => 
         await playAudio(audioUrl);
         return;
       }
-      console.warn("Áudio não disponível: a voz Kore do Gemini não pôde ser carregada.");
+      console.warn("Áudio não disponível: não foi possível carregar o áudio da ElevenLabs.");
     } catch (error) {
       console.error("Falha ao obter áudio", error);
     } finally {

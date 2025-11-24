@@ -1,33 +1,8 @@
-import { GoogleGenAI } from "@google/genai";
-
 import { InspirationQuote } from "../types";
 
 const OPENAI_API_URL = "https://api.openai.com/v1";
 const DEFAULT_AUTHOR = "JURO";
-const GEMINI_TTS_MODEL = "gemini-2.5-flash-preview-tts";
 const DEFAULT_ELEVENLABS_VOICE_ID = "21m00Tcm4TlvDq8ikWAM"; // Rachel
-
-const decodeBase64Audio = (
-  base64: string | undefined,
-  mimeType: string = "audio/mpeg"
-): string | null => {
-  if (!base64) return null;
-
-  try {
-    const binary = atob(base64);
-    const bytes = new Uint8Array(binary.length);
-
-    for (let i = 0; i < binary.length; i++) {
-      bytes[i] = binary.charCodeAt(i);
-    }
-
-    const blob = new Blob([bytes], { type: mimeType });
-    return URL.createObjectURL(blob);
-  } catch (error) {
-    console.error("Falha ao decodificar áudio base64", error);
-    return null;
-  }
-};
 
 let quotaTemporarilyBlocked = false;
 let lastQuotaBlockAt: number | null = null;
@@ -82,27 +57,6 @@ const getApiKey = (): string | undefined => {
 
   if (typeof process !== "undefined") {
     const processKey = process.env?.VITE_OPENAI_API_KEY || process.env?.OPENAI_API_KEY || process.env?.VITE_API_KEY;
-    if (!isPlaceholder(processKey)) return processKey;
-  }
-
-  return undefined;
-};
-
-const getGeminiApiKey = (): string | undefined => {
-  if (typeof import.meta !== "undefined") {
-    const inlineKey =
-      import.meta.env?.VITE_API_KEY ||
-      import.meta.env?.VITE_GEMINI_API_KEY ||
-      import.meta.env?.GEMINI_API_KEY;
-    if (!isPlaceholder(inlineKey)) return inlineKey;
-  }
-
-  if (typeof process !== "undefined") {
-    const processKey =
-      process.env?.VITE_API_KEY ||
-      process.env?.VITE_GEMINI_API_KEY ||
-      process.env?.GEMINI_API_KEY ||
-      process.env?.GOOGLE_API_KEY;
     if (!isPlaceholder(processKey)) return processKey;
   }
 
@@ -386,80 +340,49 @@ export const fetchDailyInspiration = async (
 export const fetchQuoteAudio = async (text: string): Promise<string | null> => {
   refreshQuotaBlockIfExpired();
 
-  // 1) ElevenLabs (voz feminina padrão Rachel)
   const elevenApiKey = getElevenLabsApiKey();
-  if (elevenApiKey) {
-    try {
-      const voiceId = getElevenLabsVoiceId();
-      const response = await fetch(
-        `https://api.elevenlabs.io/v1/text-to-speech/${voiceId}`,
-        {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            Accept: "audio/mpeg",
-            "xi-api-key": elevenApiKey,
-          },
-          body: JSON.stringify({
-            text,
-            model_id: "eleven_multilingual_v2",
-            voice_settings: {
-              stability: 0.4,
-              similarity_boost: 0.8,
-              style: 0.4,
-              use_speaker_boost: true,
-            },
-          }),
-        }
-      );
-
-      if (!response.ok) {
-        const errorText = await response.text();
-        console.error(
-          `Erro ElevenLabs (status ${response.status}): ${errorText || response.statusText}`
-        );
-      } else {
-        const audioBlob = await response.blob();
-        const audioUrl = URL.createObjectURL(audioBlob);
-        if (audioUrl) return audioUrl;
-      }
-    } catch (error) {
-      console.error("Erro ElevenLabs (áudio):", error);
-    }
+  if (!elevenApiKey) {
+    console.warn("Chave da ElevenLabs não configurada; áudio indisponível.");
+    return null;
   }
 
-  // 2) Gemini (voz Kore) como fallback
-  const geminiKey = getGeminiApiKey();
-  if (geminiKey) {
-    try {
-      const ai = new GoogleGenAI({ apiKey: geminiKey });
-      const request: any = {
-        model: GEMINI_TTS_MODEL,
-        contents: [{ role: "user", parts: [{ text }] }],
-        generationConfig: {
-          // A prévia do Gemini TTS não aceita configuração de voz; usa o padrão do modelo.
-          responseMimeType: "audio/mp3",
+  try {
+    const voiceId = getElevenLabsVoiceId();
+    const response = await fetch(
+      `https://api.elevenlabs.io/v1/text-to-speech/${voiceId}`,
+      {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Accept: "audio/mpeg",
+          "xi-api-key": elevenApiKey,
         },
-      };
-
-      const response = await ai.models.generateContent(request);
-
-      const inlineData = response?.candidates?.[0]?.content?.parts?.find(
-        (part: any) => part?.inlineData?.data
-      )?.inlineData;
-
-      const audioUrl = decodeBase64Audio(
-        inlineData?.data,
-        inlineData?.mimeType || "audio/mpeg"
-      );
-
-      if (audioUrl) {
-        return audioUrl;
+        body: JSON.stringify({
+          text,
+          model_id: "eleven_multilingual_v2",
+          voice_settings: {
+            stability: 0.4,
+            similarity_boost: 0.8,
+            style: 0.4,
+            use_speaker_boost: true,
+          },
+        }),
       }
-    } catch (error) {
-      console.error("Erro Gemini (áudio):", error);
-    }
-  }
+    );
 
-  return null;
+    if (!response.ok) {
+      const errorText = await response.text();
+      console.error(
+        `Erro ElevenLabs (status ${response.status}): ${errorText || response.statusText}`
+      );
+      return null;
+    }
+
+    const audioBlob = await response.blob();
+    const audioUrl = URL.createObjectURL(audioBlob);
+    return audioUrl;
+  } catch (error) {
+    console.error("Erro ElevenLabs (áudio):", error);
+    return null;
+  }
 };
