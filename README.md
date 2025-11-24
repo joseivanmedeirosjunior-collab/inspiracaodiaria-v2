@@ -27,18 +27,20 @@ View your app in AI Studio: https://ai.studio/apps/drive/15c-DOz5jh9HyHFkRvPVLC3
 - Os erros `Cannot find module './components/Header'` etc. ocorreram porque o `src/App.tsx` importava componentes e serviços em caminhos relativos errados; foram corrigidos para apontar para `../components`, `../services` e `../types`, e o build (`npm run build`) agora completa com sucesso.
 
 ## Usando a VITE_OPENAI_API_KEY no Cloudflare Pages (passo a passo simples)
-O app usa a API do ChatGPT (OpenAI) para gerar as frases e o áudio **exclusivamente** vem do Gemini TTS (voz Kore). As chaves precisam ser "queimadas" no código durante o build. Para garantir isso:
+O app usa a API do ChatGPT (OpenAI) para gerar as frases e agora sintetiza o áudio com **ElevenLabs** (voz Rachel) quando a chave estiver configurada, caindo para **Gemini TTS** (voz Kore) como plano B. As chaves precisam ser "queimadas" no código durante o build. Para garantir isso:
 
 1) Abra **Cloudflare Pages → seu projeto → Settings → Environment Variables**. Em **Production**, crie (ou confirme) o item **Nome: `VITE_OPENAI_API_KEY` / Tipo: Secret / Valor: sua chave OpenAI**. Se preferir, mantenha também `VITE_API_KEY` como alias.
-2) Ainda em **Production**, defina **`VITE_API_KEY`** (ou `VITE_GEMINI_API_KEY`) com sua chave do Gemini; isso habilita a voz **Kore** no TTS.
-3) Clique em **Deployments → Redeploy** ("Redeploy latest") para forçar um build novo já com as chaves.
-4) Depois do deploy, teste o painel Admin. Se o botão "Gerar" não responder, abra o console do navegador: se aparecer `OpenAI API Key não encontrada`, a variável não chegou ao build (repita os passos 1 a 3).
+2) Ainda em **Production**, defina **`VITE_ELEVENLABS_API_KEY`** (Secret) se quiser habilitar a voz Rachel da ElevenLabs. Opcionalmente você pode definir **`VITE_ELEVENLABS_VOICE_ID`** para usar outra voz.
+3) Se preferir manter um fallback do Gemini, adicione também **`VITE_API_KEY`** (ou `VITE_GEMINI_API_KEY`) com sua chave do Gemini; o app tentará ElevenLabs primeiro e recorrerá ao Gemini se a chamada falhar ou não houver chave configurada.
+4) Clique em **Deployments → Redeploy** ("Redeploy latest") para forçar um build novo já com as chaves.
+5) Depois do deploy, teste o painel Admin. Se o botão "Gerar" não responder, abra o console do navegador: se aparecer `OpenAI API Key não encontrada`, a variável não chegou ao build (repita os passos 1 a 4).
 
 _Dica rápida_: variáveis criadas em **Preview** não entram no build de **Production**. Verifique se está na aba certa.
 
 ### Voz do botão "Ouvir"
-- A voz usada é **sempre** a **Kore** (feminina, calma e natural) do modelo **`gemini-2.5-flash-preview-tts`**. É preciso ter `VITE_API_KEY`/`VITE_GEMINI_API_KEY` configurada.
-- Se o Gemini TTS não estiver configurado ou falhar, nenhum áudio alternativo será reproduzido (não há fallback para outras vozes) para garantir consistência sonora.
+- O app tenta primeiro a voz **Rachel** (ou outra configurada) via ElevenLabs. Configure `VITE_ELEVENLABS_API_KEY` e, se quiser, `VITE_ELEVENLABS_VOICE_ID` para personalizar.
+- Se a ElevenLabs não estiver configurada ou retornar erro, o app tenta o Gemini TTS com a voz **Kore** (`gemini-2.5-flash-preview-tts`) usando `VITE_API_KEY`/`VITE_GEMINI_API_KEY`.
+- Caso nenhum provedor de TTS esteja disponível, o botão "Ouvir" permanece, mas não haverá áudio até que alguma chave de voz seja fornecida.
 
 ### Se aparecer 429 / "insufficient_quota"
 - A mensagem vem da OpenAI quando a chave usada não tem créditos liberados, mesmo que a conta mostre saldo (ex.: chave criada em projeto sem billing ativo ou com limite bloqueado).

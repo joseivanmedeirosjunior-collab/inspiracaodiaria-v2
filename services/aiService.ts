@@ -5,6 +5,7 @@ import { InspirationQuote } from "../types";
 const OPENAI_API_URL = "https://api.openai.com/v1";
 const DEFAULT_AUTHOR = "JURO";
 const GEMINI_TTS_MODEL = "gemini-2.5-flash-preview-tts";
+const DEFAULT_ELEVENLABS_VOICE_ID = "21m00Tcm4TlvDq8ikWAM"; // Rachel
 
 const decodeBase64Audio = (
   base64: string | undefined,
@@ -106,6 +107,36 @@ const getGeminiApiKey = (): string | undefined => {
   }
 
   return undefined;
+};
+
+const getElevenLabsApiKey = (): string | undefined => {
+  if (typeof import.meta !== "undefined") {
+    const inlineKey = import.meta.env?.VITE_ELEVENLABS_API_KEY;
+    if (!isPlaceholder(inlineKey)) return inlineKey;
+  }
+
+  if (typeof process !== "undefined") {
+    const processKey =
+      process.env?.VITE_ELEVENLABS_API_KEY || process.env?.ELEVENLABS_API_KEY;
+    if (!isPlaceholder(processKey)) return processKey;
+  }
+
+  return undefined;
+};
+
+const getElevenLabsVoiceId = (): string => {
+  if (typeof import.meta !== "undefined") {
+    const inlineVoice = import.meta.env?.VITE_ELEVENLABS_VOICE_ID;
+    if (inlineVoice && !isPlaceholder(inlineVoice)) return inlineVoice;
+  }
+
+  if (typeof process !== "undefined") {
+    const processVoice =
+      process.env?.VITE_ELEVENLABS_VOICE_ID || process.env?.ELEVENLABS_VOICE_ID;
+    if (processVoice && !isPlaceholder(processVoice)) return processVoice;
+  }
+
+  return DEFAULT_ELEVENLABS_VOICE_ID;
 };
 
 export const isOpenAIApiConfigured = (): boolean => !!getApiKey();
@@ -355,7 +386,49 @@ export const fetchDailyInspiration = async (
 export const fetchQuoteAudio = async (text: string): Promise<string | null> => {
   refreshQuotaBlockIfExpired();
 
-  // Tenta apenas com Gemini (voz Kore)
+  // 1) ElevenLabs (voz feminina padrão Rachel)
+  const elevenApiKey = getElevenLabsApiKey();
+  if (elevenApiKey) {
+    try {
+      const voiceId = getElevenLabsVoiceId();
+      const response = await fetch(
+        `https://api.elevenlabs.io/v1/text-to-speech/${voiceId}`,
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Accept: "audio/mpeg",
+            "xi-api-key": elevenApiKey,
+          },
+          body: JSON.stringify({
+            text,
+            model_id: "eleven_multilingual_v2",
+            voice_settings: {
+              stability: 0.4,
+              similarity_boost: 0.8,
+              style: 0.4,
+              use_speaker_boost: true,
+            },
+          }),
+        }
+      );
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        console.error(
+          `Erro ElevenLabs (status ${response.status}): ${errorText || response.statusText}`
+        );
+      } else {
+        const audioBlob = await response.blob();
+        const audioUrl = URL.createObjectURL(audioBlob);
+        if (audioUrl) return audioUrl;
+      }
+    } catch (error) {
+      console.error("Erro ElevenLabs (áudio):", error);
+    }
+  }
+
+  // 2) Gemini (voz Kore) como fallback
   const geminiKey = getGeminiApiKey();
   if (geminiKey) {
     try {
