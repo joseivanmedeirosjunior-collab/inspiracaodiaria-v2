@@ -65,21 +65,28 @@ const getApiKey = (): string | undefined => {
 };
 
 const getElevenLabsApiKey = (): string | undefined => {
+  const normalizeKey = (value?: string) => value?.trim() || undefined;
+
   if (typeof import.meta !== "undefined") {
-    const inlineKey = import.meta.env?.VITE_ELEVENLABS_API_KEY;
-    if (!isPlaceholder(inlineKey)) return inlineKey;
+    const inlineKey =
+      import.meta.env?.VITE_ELEVENLABS_API_KEY || import.meta.env?.ELEVENLABS_API_KEY;
+    const normalizedInline = normalizeKey(inlineKey);
+    if (normalizedInline) return normalizedInline;
   }
 
   if (typeof process !== "undefined") {
     const processKey =
       process.env?.VITE_ELEVENLABS_API_KEY || process.env?.ELEVENLABS_API_KEY;
-    if (!isPlaceholder(processKey)) return processKey;
+    const normalizedProcess = normalizeKey(processKey);
+    if (normalizedProcess) return normalizedProcess;
   }
 
   return undefined;
 };
 
-export const isElevenLabsConfigured = (): boolean => !!getElevenLabsApiKey();
+export const isElevenLabsConfigured = (): boolean => {
+  return !!getElevenLabsApiKey();
+};
 
 const getElevenLabsVoiceId = (): string => {
   if (typeof import.meta !== "undefined") {
