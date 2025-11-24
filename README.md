@@ -38,7 +38,7 @@ _Dica rápida_: variáveis criadas em **Preview** não entram no build de **Prod
 
 ### Voz do botão "Ouvir"
 - O app usa apenas a voz **Rachel** (ou outra configurada) via ElevenLabs. Configure `VITE_ELEVENLABS_API_KEY` e, se quiser, `VITE_ELEVENLABS_VOICE_ID` para personalizar.
-- Caso a ElevenLabs não esteja configurada ou retorne erro, o botão "Ouvir" permanece, mas não haverá áudio até que a chave seja fornecida.
+- Caso a ElevenLabs não esteja configurada no build ou retorne erro, o botão "Ouvir" fica desativado e uma mensagem informa que a variável `VITE_ELEVENLABS_API_KEY` precisa ser definida.
 
 ### Se aparecer 429 / "insufficient_quota"
 - A mensagem vem da OpenAI quando a chave usada não tem créditos liberados, mesmo que a conta mostre saldo (ex.: chave criada em projeto sem billing ativo ou com limite bloqueado).

@@ -7,6 +7,7 @@ const DEFAULT_ELEVENLABS_VOICE_ID = "21m00Tcm4TlvDq8ikWAM"; // Rachel
 let quotaTemporarilyBlocked = false;
 let lastQuotaBlockAt: number | null = null;
 const QUOTA_COOLDOWN_MS = 10 * 60 * 1000; // 10 minutos
+let hasWarnedMissingElevenLabsKey = false;
 
 export const isQuotaBlocked = () => {
   refreshQuotaBlockIfExpired();
@@ -77,6 +78,8 @@ const getElevenLabsApiKey = (): string | undefined => {
 
   return undefined;
 };
+
+export const isElevenLabsConfigured = (): boolean => !!getElevenLabsApiKey();
 
 const getElevenLabsVoiceId = (): string => {
   if (typeof import.meta !== "undefined") {
@@ -342,7 +345,12 @@ export const fetchQuoteAudio = async (text: string): Promise<string | null> => {
 
   const elevenApiKey = getElevenLabsApiKey();
   if (!elevenApiKey) {
-    console.warn("Chave da ElevenLabs não configurada; áudio indisponível.");
+    if (!hasWarnedMissingElevenLabsKey) {
+      console.warn(
+        "Chave da ElevenLabs não configurada; áudio indisponível. Configure a variável VITE_ELEVENLABS_API_KEY no ambiente de build."
+      );
+      hasWarnedMissingElevenLabsKey = true;
+    }
     return null;
   }
 
