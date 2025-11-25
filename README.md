@@ -36,6 +36,12 @@ O app usa a API do ChatGPT (OpenAI) para gerar as frases e o áudio **exclusivam
 
 _Dica rápida_: variáveis criadas em **Preview** não entram no build de **Production**. Verifique se está na aba certa.
 
+### Checklist rápido para o domínio `inspiracaodiaria.lojajuro.com.br`
+- **Nada de Cloudflare Pages “Preview”**: confirme as variáveis `VITE_OPENAI_API_KEY` e `VITE_API_KEY`/`VITE_GEMINI_API_KEY` em **Production** antes de qualquer publicação.
+- **Rebuild forçado**: execute **Deployments → Redeploy → Redeploy latest** assim que ajustar as variáveis para garantir que o bundle consuma os valores novos.
+- **Custom domain**: em **Pages → Custom domains**, conecte `inspiracaodiaria.lojajuro.com.br` e aguarde a verificação DNS completar.
+- **Teste final + limpeza**: após o domínio responder direto (sem erro 526/522), remova/desative o proxy ou CNAME que antes apontava para o GitHub Pages para evitar cache ou SSL incorreto.
+
 ### Voz do botão "Ouvir"
 - A voz usada é **sempre** a **Kore** (feminina, calma e natural) do modelo **`gemini-2.5-flash-preview-tts`**. É preciso ter `VITE_API_KEY`/`VITE_GEMINI_API_KEY` configurada.
 - Se o Gemini TTS não estiver configurado ou falhar, nenhum áudio alternativo será reproduzido (não há fallback para outras vozes) para garantir consistência sonora.
