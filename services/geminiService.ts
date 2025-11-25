@@ -1,15 +1,18 @@
-import { GoogleGenAI, Type, Modality } from "@google/genai";
+import { GoogleGenAI, Type } from "@google/genai";
 import { InspirationQuote } from "../types";
 
-// Helper para obter a chave de API de forma segura
+// Helper para obter a chave de API do Gemini de forma segura
 const getApiKey = (): string | undefined => {
-  // Tenta ler do Vite (Cloudflare) usando optional chaining
   if (typeof import.meta !== 'undefined' && import.meta.env && import.meta.env.VITE_API_KEY) {
     return import.meta.env.VITE_API_KEY;
   }
-  // Tenta ler do ambiente local (Legacy)
-  if (typeof process !== 'undefined' && process.env && process.env.API_KEY) {
-    return process.env.API_KEY;
+  return undefined;
+};
+
+// Helper para obter a chave da ElevenLabs
+const getElevenLabsKey = (): string | undefined => {
+  if (typeof import.meta !== 'undefined' && import.meta.env && import.meta.env.VITE_ELEVENLABS_API_KEY) {
+    return import.meta.env.VITE_ELEVENLABS_API_KEY;
   }
   return undefined;
 };
@@ -17,15 +20,11 @@ const getApiKey = (): string | undefined => {
 export const fetchDailyInspiration = async (excludeAuthors: string[] = []): Promise<InspirationQuote> => {
   const apiKey = getApiKey();
   
-  // Debug Log (não mostra a chave inteira, apenas se existe)
-  console.log("Gemini Service - API Key detectada:", !!apiKey);
-  
   if (!apiKey) {
-    console.error("FATAL: API Key não encontrada. Verifique o painel do Cloudflare.");
-    throw new Error("Chave de API não configurada no sistema.");
+    console.error("FATAL: API Key não encontrada no ambiente.");
+    throw new Error("Chave de API do Gemini não configurada no sistema.");
   }
 
-  // Inicialização Lazy
   const ai = new GoogleGenAI({ apiKey });
   const modelId = "gemini-2.5-flash";
   
@@ -43,21 +42,29 @@ export const fetchDailyInspiration = async (excludeAuthors: string[] = []): Prom
   const randomTheme = themes[Math.floor(Math.random() * themes.length)];
   const randomSeed = Math.floor(Math.random() * 1000000);
 
-  const exclusionInstruction = excludeAuthors.length > 0
-    ? `IMPORTANTE: NÃO utilize estas autoras: ${excludeAuthors.join(", ")}.`
-    : "";
+  const blacklistStr = excludeAuthors.length > 0 
+    ? excludeAuthors.map(a => `"${a}"`).join(", ") 
+    : "Nenhuma";
 
   const prompt = `
-    Tarefa: Frase CURTA e MOTIVACIONAL de uma mulher inspiradora.
-    Tema: ${randomTheme}
-    Seed: ${randomSeed}
-    ${exclusionInstruction}
-
-    Requisitos:
-    1. Frase CURTA (max 2 orações).
-    2. Autora mulher.
-    3. Português do Brasil.
-    4. JSON Output.
+    ATUE COMO: Curador especialista em literatura feminina mundial e história das mulheres.
+    OBJETIVO: Gerar uma frase inspiradora autêntica de uma mulher notável.
+    PARÂMETROS GERAIS:
+    - Tema: ${randomTheme}
+    - Seed de Aleatoriedade: ${randomSeed}
+    - Idioma: Português do Brasil (pt-BR).
+    REGRAS CRÍTICAS (Siga rigorosamente):
+    1. **BLACKLIST (PROIBIDO USAR)**: As seguintes autoras já foram usadas recentemente e NÃO podem ser repetidas: [${blacklistStr}].
+    2. **VERACIDADE**: A frase deve ser real. Não invente frases. Se não tiver certeza absoluta da autoria, escolha outra.
+    3. **DIVERSIDADE**: Busque ativamente mulheres da África, Ásia, América Latina (além do Brasil), Oriente Médio e Indígenas. Evite focar apenas em EUA/Europa.
+    4. **FORMATO**: Frase CURTA e impactante (máximo 2 orações). Perfeita para redes sociais.
+    SAÍDA ESPERADA (JSON Puro):
+    {
+      "quote": "A frase em português.",
+      "author": "Nome da Mulher",
+      "role": "Profissão ou Papel (ex: Ativista, Poeta, Cientista)",
+      "country": "País de Origem"
+    }
   `;
 
   try {
@@ -76,25 +83,26 @@ export const fetchDailyInspiration = async (excludeAuthors: string[] = []): Prom
           },
           required: ["quote", "author", "role", "country"],
         },
-        temperature: 1.2,
+        temperature: 1.0, 
       },
     });
 
     const jsonText = response.text;
     if (!jsonText) throw new Error("Gemini não retornou texto");
 
-    return JSON.parse(jsonText) as InspirationQuote;
+    const result = JSON.parse(jsonText) as InspirationQuote;
+    return result;
 
   } catch (error: any) {
-    console.error("Erro Gemini:", error);
-    const errorMsg = JSON.stringify(error);
-
-    // Detecção específica de Chave Vazada/Bloqueada
-    if (errorMsg.includes("leaked") || errorMsg.includes("PERMISSION_DENIED") || errorMsg.includes("403")) {
-        throw new Error("⚠️ A chave de API foi bloqueada pelo Google (vazamento detectado). Por favor, gere uma nova chave no AI Studio e atualize no Cloudflare.");
+    const errorMsg = error?.toString() || JSON.stringify(error);
+    
+    if (errorMsg.includes("403") || errorMsg.includes("leaked") || errorMsg.includes("PERMISSION_DENIED")) {
+        console.error("BLOCK: Chave de API bloqueada pelo Google.");
+        throw new Error("⚠️ ERRO CRÍTICO: Sua Chave de API do Gemini foi bloqueada pelo Google. Gere uma nova chave no AI Studio e atualize no Cloudflare.");
     }
-
-    // Fallback seguro apenas para outros erros (timeout, rede temporária)
+    
+    console.error("Erro Gemini:", error);
+    
     return {
       quote: "Pés, para que os quero, se tenho asas para voar?",
       author: "Frida Kahlo",
@@ -104,31 +112,58 @@ export const fetchDailyInspiration = async (excludeAuthors: string[] = []): Prom
   }
 };
 
+// Função atualizada para usar ElevenLabs
 export const fetchQuoteAudio = async (text: string): Promise<string | null> => {
   try {
-    const apiKey = getApiKey();
-    if (!apiKey) return null;
-
-    const ai = new GoogleGenAI({ apiKey });
+    const apiKey = getElevenLabsKey();
     
-    const response = await ai.models.generateContent({
-      model: "gemini-2.5-flash-preview-tts",
-      contents: { parts: [{ text: text }] },
-      config: {
-        responseModalities: [Modality.AUDIO],
-        speechConfig: {
-          voiceConfig: { prebuiltVoiceConfig: { voiceName: 'Kore' } },
-        },
+    if (!apiKey) {
+      console.error("ElevenLabs API Key não configurada.");
+      alert("⚠️ Chave da ElevenLabs não configurada. Adicione VITE_ELEVENLABS_API_KEY no Cloudflare.");
+      return null;
+    }
+
+    // ID da voz "Rachel" (Feminina, Americana, mas funciona bem em pt-BR com o modelo multilingual)
+    // Outra opção boa: "Bella" (EXAVITQu4vr4xnSDxMaL)
+    const VOICE_ID = "21m00Tcm4TlvDq8ikWAM"; 
+
+    const response = await fetch(`https://api.elevenlabs.io/v1/text-to-speech/${VOICE_ID}`, {
+      method: "POST",
+      headers: {
+        "Accept": "audio/mpeg",
+        "Content-Type": "application/json",
+        "xi-api-key": apiKey,
       },
+      body: JSON.stringify({
+        text: text,
+        model_id: "eleven_multilingual_v2", // Essencial para falar Português corretamente
+        voice_settings: {
+          stability: 0.5,
+          similarity_boost: 0.75,
+        },
+      }),
     });
 
-    return response.candidates?.[0]?.content?.parts?.[0]?.inlineData?.data || null;
-  } catch (error: any) {
-    console.error("Erro Audio:", error);
-    const errorMsg = JSON.stringify(error);
-    if (errorMsg.includes("leaked") || errorMsg.includes("403")) {
-        console.error("CRÍTICO: Chave de API vazada bloqueou o áudio.");
+    if (!response.ok) {
+      const errorDetail = await response.json();
+      console.error("Erro ElevenLabs:", errorDetail);
+      if (response.status === 401) {
+        alert("⚠️ Erro de Autenticação ElevenLabs. Verifique sua chave API.");
+      }
+      return null;
     }
+
+    // ElevenLabs retorna o binário do MP3. Convertemos para Base64 para tocar no front.
+    const arrayBuffer = await response.arrayBuffer();
+    const base64String = btoa(
+      new Uint8Array(arrayBuffer)
+        .reduce((data, byte) => data + String.fromCharCode(byte), '')
+    );
+
+    return base64String;
+
+  } catch (error: any) {
+    console.error("Erro Audio ElevenLabs:", error);
     return null;
   }
 };

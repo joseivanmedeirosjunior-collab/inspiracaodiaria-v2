@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { Share2, Quote, Copy, Check, Volume2, StopCircle, Loader2, Heart, Zap, Star } from 'lucide-react';
 import { InspirationQuote, ReactionCounts, ReactionType } from '../types';
 import { fetchQuoteAudio } from '../services/geminiService';
@@ -8,36 +8,6 @@ interface QuoteCardProps {
   data: InspirationQuote | null;
   loading: boolean;
   date: Date;
-}
-
-// Funções auxiliares para decodificação de áudio PCM do Gemini
-function decode(base64: string) {
-  const binaryString = atob(base64);
-  const len = binaryString.length;
-  const bytes = new Uint8Array(len);
-  for (let i = 0; i < len; i++) {
-    bytes[i] = binaryString.charCodeAt(i);
-  }
-  return bytes;
-}
-
-async function decodeAudioData(
-  data: Uint8Array,
-  ctx: AudioContext,
-  sampleRate: number,
-  numChannels: number,
-): Promise<AudioBuffer> {
-  const dataInt16 = new Int16Array(data.buffer);
-  const frameCount = dataInt16.length / numChannels;
-  const buffer = ctx.createBuffer(numChannels, frameCount, sampleRate);
-
-  for (let channel = 0; channel < numChannels; channel++) {
-    const channelData = buffer.getChannelData(channel);
-    for (let i = 0; i < frameCount; i++) {
-      channelData[i] = dataInt16[i * numChannels + channel] / 32768.0;
-    }
-  }
-  return buffer;
 }
 
 export const QuoteCard: React.FC<QuoteCardProps> = ({ data, loading, date }) => {
@@ -53,13 +23,16 @@ export const QuoteCard: React.FC<QuoteCardProps> = ({ data, loading, date }) => 
   const [userVotes, setUserVotes] = useState<Record<string, boolean>>({});
   const [isVoting, setIsVoting] = useState(false);
 
-  // Refs de Áudio
-  const audioContextRef = useRef<AudioContext | null>(null);
-  const sourceNodeRef = useRef<AudioBufferSourceNode | null>(null);
+  // Ref para o elemento de áudio HTML5 nativo (muito mais simples para MP3)
+  const audioRef = useRef<HTMLAudioElement | null>(null);
 
   // Carregar reações iniciais
   useEffect(() => {
     if (data) {
+        // Resetar cache de áudio se mudar a frase
+        setAudioCache(null);
+        stopAudio();
+
         const loadReactions = async () => {
             const counts = await getReactions(date);
             setReactions(counts);
@@ -77,64 +50,42 @@ export const QuoteCard: React.FC<QuoteCardProps> = ({ data, loading, date }) => 
     }
   }, [data, date]);
 
-  // Limpar áudio ao desmontar ou mudar a frase
+  // Limpar áudio ao desmontar
   useEffect(() => {
     return () => {
       stopAudio();
-      if (audioContextRef.current?.state !== 'closed') {
-        audioContextRef.current?.close();
-      }
     };
-  }, [data]);
+  }, []);
 
   const stopAudio = () => {
-    if (sourceNodeRef.current) {
-      try {
-        sourceNodeRef.current.stop();
-      } catch (e) {
-        // Ignorar erro se já estiver parado
-      }
-      sourceNodeRef.current = null;
+    if (audioRef.current) {
+      audioRef.current.pause();
+      audioRef.current.currentTime = 0;
     }
     setIsSpeaking(false);
   };
 
-  const playAudio = async (base64Data: string) => {
-    try {
-      if (!audioContextRef.current || audioContextRef.current.state === 'closed') {
-        audioContextRef.current = new (window.AudioContext || (window as any).webkitAudioContext)({ sampleRate: 24000 });
-      }
-
-      if (audioContextRef.current.state === 'suspended') {
-        await audioContextRef.current.resume();
-      }
-
-      const audioBuffer = await decodeAudioData(
-        decode(base64Data),
-        audioContextRef.current,
-        24000,
-        1 
-      );
-
-      stopAudio();
-
-      const source = audioContextRef.current.createBufferSource();
-      source.buffer = audioBuffer;
-      source.connect(audioContextRef.current.destination);
-      
-      source.onended = () => {
-        setIsSpeaking(false);
-        sourceNodeRef.current = null;
-      };
-
-      sourceNodeRef.current = source;
-      source.start();
-      setIsSpeaking(true);
-
-    } catch (error) {
-      console.error("Erro ao reproduzir áudio:", error);
+  const playAudioData = (base64Data: string) => {
+    stopAudio();
+    
+    // Cria um player nativo para o MP3 Base64
+    const audio = new Audio(`data:audio/mpeg;base64,${base64Data}`);
+    
+    audio.onended = () => {
       setIsSpeaking(false);
-    }
+    };
+    
+    audio.onerror = (e) => {
+      console.error("Erro ao tocar áudio", e);
+      setIsSpeaking(false);
+    };
+
+    audioRef.current = audio;
+    audio.play().catch(e => {
+        console.error("Play falhou (interação necessária?)", e);
+        setIsSpeaking(false);
+    });
+    setIsSpeaking(true);
   };
 
   const handleSpeak = async () => {
@@ -146,18 +97,21 @@ export const QuoteCard: React.FC<QuoteCardProps> = ({ data, loading, date }) => 
     }
 
     if (audioCache) {
-      playAudio(audioCache);
+      playAudioData(audioCache);
       return;
     }
 
     setIsLoadingAudio(true);
     try {
-      const textToSpeak = `${data.quote}. Frase de ${data.author}.`;
+      const textToSpeak = `"${data.quote}" ... ${data.author}.`;
+      // fetchQuoteAudio agora chama ElevenLabs
       const base64 = await fetchQuoteAudio(textToSpeak);
       
       if (base64) {
         setAudioCache(base64);
-        await playAudio(base64);
+        playAudioData(base64);
+      } else {
+        // Erros já são logados no service, aqui apenas paramos o loading
       }
     } catch (error) {
       console.error("Falha ao obter áudio", error);
@@ -169,41 +123,31 @@ export const QuoteCard: React.FC<QuoteCardProps> = ({ data, loading, date }) => 
   const handleReaction = async (newType: ReactionType) => {
     if (isVoting) return; 
 
-    // 1. Identificar se já existe um voto anterior
     const previousVote = Object.keys(userVotes).find(key => userVotes[key]) as ReactionType | undefined;
 
-    // Se o usuário clicou no mesmo que já estava, não fazemos nada (ou poderíamos desmarcar/toggle off)
-    // Seguindo a lógica de "mudar de ideia", apenas ignoramos o clique repetido para evitar recalculo
     if (previousVote === newType) return;
 
     setIsVoting(true);
 
-    // 2. Atualização Otimista (UI)
     const updatedReactions = { ...reactions };
     
-    // Se tinha voto antes, remove 1
     if (previousVote) {
         updatedReactions[previousVote] = Math.max(0, updatedReactions[previousVote] - 1);
     }
-    // Adiciona 1 no novo voto
     updatedReactions[newType] = updatedReactions[newType] + 1;
     
     setReactions(updatedReactions);
     
-    // 3. Atualizar estado local de votos do usuário (Garante exclusividade)
-    const newUserVotes: Record<string, boolean> = { [newType]: true }; // Apenas o novo é true
+    const newUserVotes: Record<string, boolean> = { [newType]: true };
     setUserVotes(newUserVotes);
     
-    // Salvar no localStorage
     const dateKey = formatDateKey(date);
     localStorage.setItem(`juro_votes_${dateKey}`, JSON.stringify(newUserVotes));
 
-    // 4. Enviar para o servidor (backend)
     try {
        await registerReaction(date, newType, previousVote);
     } catch (e) {
        console.error("Falha ao salvar reação", e);
-       // Em caso de erro real, poderíamos reverter o estado, mas para UX simples mantemos otimista
     } finally {
         setIsVoting(false);
     }

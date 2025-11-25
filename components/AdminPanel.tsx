@@ -43,8 +43,8 @@ export const AdminPanel: React.FC = () => {
   // Helper para pegar lista de autoras já usadas (para evitar repetição)
   const getUsedAuthors = (): string[] => {
     return Object.values(queue)
-      .map((item: QueueItem) => item.data?.author)
-      .filter((author): author is string => !!author);
+      .filter((item: QueueItem) => item.data && item.data.author)
+      .map((item: QueueItem) => item.data!.author.trim());
   };
 
   // Efeito para preenchimento automático sequencial
@@ -62,16 +62,13 @@ export const AdminPanel: React.FC = () => {
         
         // Se não tem nada na fila para este dia E não estamos carregando ele agora
         if (!queue[dateKey] && !loadingDates[dateKey]) {
-          // Encontrou um buraco! Vamos preencher.
-          await handleGenerate(currentDate, true); // true = modo silencioso/automático
-          return; // Sai da função e deixa o useEffect rodar de novo quando o estado 'queue' atualizar
+          await handleGenerate(currentDate, true); 
+          return; 
         }
       }
-      // Se chegou aqui, todos os dias têm algo (ou estão carregando). Podemos parar.
       autoFillRef.current = false;
     };
 
-    // Delay para não sobrecarregar a API e o Banco
     const timer = setTimeout(fillNextEmptyDay, 1500);
     return () => clearTimeout(timer);
   }, [queue, isAuthenticated, loadingDates, loadingQueue]);
@@ -79,12 +76,20 @@ export const AdminPanel: React.FC = () => {
   const handleLogin = (e: React.FormEvent) => {
     e.preventDefault();
     
-    // Busca senha do Cloudflare de forma segura
-    // Usa optional chaining (?.) para evitar erro se import.meta.env for undefined
-    const envPassword = import.meta.env?.VITE_ADMIN_PASSWORD;
-    const correctPassword = envPassword || 'admin';
+    let correctPassword = 'admin';
+    
+    // Leitura Defensiva da Senha
+    try {
+        // Tenta acessar import.meta.env de forma segura
+        // @ts-ignore
+        const env = import.meta.env;
+        if (env && env.VITE_ADMIN_PASSWORD) {
+            correctPassword = env.VITE_ADMIN_PASSWORD;
+        }
+    } catch (error) {
+        console.warn("Ambiente não suporta import.meta.env ou variável não definida.");
+    }
 
-    // Comparação exata (sem toLowerCase para permitir senhas fortes)
     if (password === correctPassword) {
       setIsAuthenticated(true);
       sessionStorage.setItem('juro_admin_auth', 'true');
@@ -106,16 +111,16 @@ export const AdminPanel: React.FC = () => {
     setLoadingDates(prev => ({ ...prev, [dateKey]: true }));
     
     try {
-      // 1. Coleta autoras já usadas para enviar como exclusão
       const usedAuthors = getUsedAuthors();
+      
+      if (!isAuto) {
+        console.log(`Gerando para ${dateKey}. Excluindo ${usedAuthors.length} autoras.`);
+      }
 
-      // 2. Gera com IA passando as exclusões
       const newQuote = await fetchDailyInspiration(usedAuthors);
       
-      // 3. Salva no Supabase
       await updateQueueItem(date, 'draft', newQuote);
       
-      // 4. Atualiza estado local para refletir mudança instantaneamente
       setQueue(prev => ({
         ...prev,
         [dateKey]: {
@@ -127,9 +132,12 @@ export const AdminPanel: React.FC = () => {
     } catch (error: any) {
       console.error("Erro ao gerar frase", error);
       if (!isAuto) {
-         // Mensagem de erro amigável baseada na falha
          const msg = error.message || "Erro desconhecido ao conectar com a IA.";
-         alert(`Erro ao gerar frase: ${msg}`);
+         if (msg.includes("bloqueada") || msg.includes("leaked") || msg.includes("403")) {
+             alert("ERRO CRÍTICO: A Chave de API foi bloqueada pelo Google (vazada). Acesse o Cloudflare e atualize a variável VITE_API_KEY com uma nova chave.");
+         } else {
+             alert(`Erro ao gerar frase: ${msg}`);
+         }
       }
     } finally {
       setLoadingDates(prev => ({ ...prev, [dateKey]: false }));
@@ -156,14 +164,12 @@ export const AdminPanel: React.FC = () => {
         
         try {
           if (currentItem && currentItem.data) {
-             // Volta para rascunho mantendo os dados
              await updateQueueItem(date, 'draft', currentItem.data);
              setQueue(prev => ({
                 ...prev,
                 [dateKey]: { ...prev[dateKey], status: 'draft' }
              }));
           } else {
-             // Caso raro onde não há dados (fallback)
              await updateQueueItem(date, 'draft');
              setQueue(prev => ({
                 ...prev,
@@ -269,7 +275,6 @@ export const AdminPanel: React.FC = () => {
 
   return (
     <div className="w-full max-w-5xl mx-auto px-4 py-8 pb-24">
-      {/* Header do Admin */}
       <div className="flex flex-col md:flex-row md:items-center justify-between mb-8 gap-4 bg-white p-6 rounded-2xl shadow-sm border border-pink-50">
         <div className="flex items-center gap-4">
           <button 
@@ -282,7 +287,7 @@ export const AdminPanel: React.FC = () => {
           <div>
              <h1 className="text-2xl md:text-3xl font-serif font-bold text-juro-text">Gerenciador Editorial</h1>
              <p className="text-sm text-gray-500">
-                {loadingQueue ? 'Sincronizando com o banco de dados...' : 'Planeje as frases dos próximos 30 dias'}
+                {loadingQueue ? 'Sincronizando...' : 'Planeje as frases dos próximos 30 dias'}
              </p>
           </div>
         </div>
@@ -326,14 +331,12 @@ export const AdminPanel: React.FC = () => {
                         : 'border-pink-50 shadow-sm hover:border-pink-200'
                   }`}
                 >
-                  {/* Status Flag */}
                   <div className={`absolute top-0 right-0 px-3 py-1 rounded-bl-xl text-xs font-bold uppercase tracking-wider
                     ${isApproved ? 'bg-green-100 text-green-700' : hasDraft ? 'bg-yellow-50 text-yellow-600' : 'bg-gray-100 text-gray-400'}`}>
                     {isApproved ? 'Aprovado' : hasDraft ? 'Rascunho' : 'Vazio'}
                   </div>
 
                   <div className="flex flex-col md:flex-row md:items-start gap-6 mt-2">
-                    {/* Data Coluna Esquerda */}
                     <div className="min-w-[200px] md:border-r md:border-pink-50 pr-4">
                       <div className="flex items-center gap-2 text-juro-primary mb-1">
                         <Calendar size={20} />
@@ -343,16 +346,13 @@ export const AdminPanel: React.FC = () => {
                       <p className="text-xs text-gray-400 mt-1">{date.getFullYear()}</p>
                     </div>
 
-                    {/* Conteúdo Central */}
                     <div className="flex-grow w-full">
-                      
-                      {/* MODO EDIÇÃO */}
                       {isEditing ? (
                         <div className="bg-gray-50 p-4 rounded-xl space-y-3 border border-gray-200">
                             <div className="space-y-1">
                                 <label className="text-xs font-bold text-gray-500 uppercase">Frase</label>
                                 <textarea 
-                                    className="w-full p-3 rounded-lg border border-gray-300 focus:ring-2 focus:ring-juro-primary focus:border-transparent text-juro-text font-serif"
+                                    className="w-full p-3 rounded-lg border border-gray-300 focus:ring-2 focus:ring-juro-primary text-juro-text font-serif"
                                     rows={3}
                                     value={editForm.quote}
                                     onChange={(e) => setEditForm({...editForm, quote: e.target.value})}
@@ -366,16 +366,14 @@ export const AdminPanel: React.FC = () => {
                                         className="w-full p-2 rounded-lg border border-gray-300 focus:ring-2 focus:ring-juro-primary"
                                         value={editForm.author}
                                         onChange={(e) => setEditForm({...editForm, author: e.target.value})}
-                                        placeholder="Nome da Autora"
                                     />
                                 </div>
                                 <div>
-                                    <label className="text-xs font-bold text-gray-500 uppercase">Profissão/Papel</label>
+                                    <label className="text-xs font-bold text-gray-500 uppercase">Profissão</label>
                                     <input 
                                         className="w-full p-2 rounded-lg border border-gray-300 focus:ring-2 focus:ring-juro-primary"
                                         value={editForm.role}
                                         onChange={(e) => setEditForm({...editForm, role: e.target.value})}
-                                        placeholder="Ex: Escritora"
                                     />
                                 </div>
                                 <div>
@@ -384,19 +382,17 @@ export const AdminPanel: React.FC = () => {
                                         className="w-full p-2 rounded-lg border border-gray-300 focus:ring-2 focus:ring-juro-primary"
                                         value={editForm.country}
                                         onChange={(e) => setEditForm({...editForm, country: e.target.value})}
-                                        placeholder="Ex: Brasil"
                                     />
                                 </div>
                             </div>
                             <div className="flex justify-end gap-2 mt-2">
                                 <button onClick={cancelEditing} className="px-4 py-2 text-sm text-gray-500 hover:bg-gray-200 rounded-lg">Cancelar</button>
                                 <button onClick={() => saveManualEdit(date)} className="px-4 py-2 text-sm bg-juro-primary text-white hover:bg-pink-600 rounded-lg font-bold flex items-center gap-2">
-                                    {isLoading ? <Loader2 size={16} className="animate-spin"/> : <Save size={16} />} Salvar Rascunho
+                                    {isLoading ? <Loader2 size={16} className="animate-spin"/> : <Save size={16} />} Salvar
                                 </button>
                             </div>
                         </div>
                       ) : (
-                        // MODO VISUALIZAÇÃO
                         <>
                           {hasDraft && item?.data ? (
                             <div className="mb-6">
@@ -405,7 +401,6 @@ export const AdminPanel: React.FC = () => {
                                 <span className="font-bold text-juro-primary text-sm uppercase tracking-wide">— {item.data.author}</span>
                                 <span className="text-gray-300">|</span>
                                 <span className="text-xs text-gray-500">{item.data.role}</span>
-                                <span className="text-gray-300">|</span>
                                 <span className="text-xs text-gray-500">{item.data.country}</span>
                               </div>
                             </div>
@@ -415,9 +410,7 @@ export const AdminPanel: React.FC = () => {
                             </div>
                           )}
 
-                          {/* Barra de Ferramentas */}
                           <div className="flex flex-wrap items-center gap-3 pt-2 border-t border-gray-100">
-                            {/* Botão Gerar/Regerar */}
                             {!isApproved && (
                                 <button
                                     onClick={() => handleGenerate(date)}
@@ -428,19 +421,15 @@ export const AdminPanel: React.FC = () => {
                                     {hasDraft ? 'Gerar Outra' : 'Gerar Automático'}
                                 </button>
                             )}
-
-                            {/* Botão Editar Manualmente */}
                             {!isApproved && (
                                 <button 
                                     onClick={() => startEditing(dateKey, item?.data)}
                                     className="flex items-center gap-2 px-4 py-2 rounded-lg bg-gray-100 text-gray-600 hover:bg-gray-200 font-medium text-sm transition-colors"
                                 >
                                     <Edit2 size={16} />
-                                    {hasDraft ? 'Editar' : 'Escrever Manualmente'}
+                                    {hasDraft ? 'Editar' : 'Manual'}
                                 </button>
                             )}
-
-                            {/* Ações de Aprovação */}
                             {hasDraft && !isApproved && (
                               <div className="ml-auto pl-4 border-l border-gray-100">
                                 <button
@@ -448,23 +437,21 @@ export const AdminPanel: React.FC = () => {
                                   className="flex items-center gap-2 px-6 py-2 rounded-lg bg-green-500 text-white hover:bg-green-600 shadow-md hover:shadow-lg transform active:scale-95 transition-all font-bold text-sm"
                                 >
                                   <Check size={18} />
-                                  Aprovar Publicação
+                                  Aprovar
                                 </button>
                               </div>
                             )}
-
-                            {/* Status Aprovado */}
                             {isApproved && (
                               <div className="flex items-center justify-between w-full md:w-auto ml-auto">
                                 <span className="flex items-center gap-2 text-green-600 font-bold text-sm bg-green-50 px-4 py-2 rounded-lg border border-green-100 mr-2">
                                   <Check size={16} />
-                                  Publicação Agendada
+                                  Agendado
                                 </span>
                                 <button
                                   onClick={() => handleReject(date)}
                                   className="text-xs text-orange-400 hover:text-orange-600 hover:bg-orange-50 px-3 py-1 rounded transition-colors"
                                 >
-                                  Cancelar Aprovação
+                                  Cancelar
                                 </button>
                               </div>
                             )}
