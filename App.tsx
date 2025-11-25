@@ -103,6 +103,12 @@ export default function App() {
     }
   }, [currentPath, loadData]);
 
+  // Função para limpar cache e recarregar
+  const handleRetry = () => {
+    localStorage.removeItem(LOCAL_STORAGE_KEY);
+    window.location.reload();
+  };
+
   // RENDER: Admin View
   if (currentPath === '#admin') {
     return (
@@ -156,10 +162,10 @@ export default function App() {
                 )}
                 
                 <button 
-                  onClick={() => window.location.reload()}
+                  onClick={handleRetry}
                   className="mt-6 px-6 py-2 bg-red-500 text-white rounded-lg hover:bg-red-600 transition-colors font-bold"
                 >
-                  Tentar Novamente
+                  Tentar Novamente (Limpar Cache)
                 </button>
               </div>
             ) : (
