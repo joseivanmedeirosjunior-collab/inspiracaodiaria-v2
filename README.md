@@ -50,6 +50,14 @@ _Dica rápida_: variáveis criadas em **Preview** não entram no build de **Prod
 - No painel Admin há o botão **"Tentar novamente agora"**, que remove o bloqueio imediatamente (útil após trocar a chave ou liberar billing) sem esperar o cooldown.
 - Se voltar a receber 429, o bloqueio é reativado e o app segue usando frases locais para não parar a operação.
 
+## Publicando no GitHub Pages (sem Cloudflare)
+O repositório agora inclui um workflow (`.github/workflows/deploy.yml`) que compila e publica o conteúdo da pasta `dist` no GitHub Pages sempre que você fizer push na branch `main` (ou acionar manualmente em **Actions → Deploy to GitHub Pages → Run workflow**). Para que tudo funcione:
+
+1. No repositório, abra **Settings → Secrets and variables → Actions → New repository secret** e crie `VITE_OPENAI_API_KEY` com sua chave da OpenAI. Se quiser a voz Kore, crie também `VITE_API_KEY` ou `VITE_GEMINI_API_KEY` com a chave do Gemini.
+2. Em **Settings → Pages**, deixe a Source como "GitHub Actions".
+3. Faça push para `main` ou execute o workflow manualmente. O pipeline roda `npm run build` com `BASE_PATH=/<nome-do-repo>/` para gerar os caminhos corretos e publica o resultado no Pages.
+4. Depois do deploy, acesse a URL indicada pelo próprio workflow (ex.: `https://<seu-usuario>.github.io/<nome-do-repo>/`).
+
 ## Evitando frases repetidas
 - Antes de gerar uma nova frase, o painel Admin agora lê todas as citações existentes no Supabase (agendadas, pendentes ou aprovadas) e envia essa lista ampliada (até 200 itens) como exclusão para a IA.
 - O modelo foi ajustado para criar frases **originais** assinadas pela autora fixa **JURO**, reduzindo colisões de autoras conhecidas.
