@@ -1,0 +1,21 @@
+{
+  "name": "Inspiração Diária JURO",
+  "short_name": "JURO",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#FFF5F8",
+  "theme_color": "#E9568D",
+  "orientation": "portrait",
+  "icons": [
+    {
+      "src": "/logo.png",
+      "sizes": "192x192",
+      "type": "image/png"
+    },
+    {
+      "src": "/logo.png",
+      "sizes": "512x512",
+      "type": "image/png"
+    }
+  ]
+}
