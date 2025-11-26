@@ -1,44 +1,26 @@
 import { GoogleGenAI, Type } from "@google/genai";
 import { InspirationQuote } from "../types";
 
-// Helper para obter a chave de API do Gemini de forma segura
-const getApiKey = (): string | undefined => {
+// Helper genérico para obter variáveis de ambiente de forma segura
+const getEnvVar = (key: string): string | undefined => {
   // 1. Tenta Vite (Cloudflare/Produção)
-  if (typeof import.meta !== 'undefined' && import.meta.env && import.meta.env.VITE_API_KEY) {
-    return import.meta.env.VITE_API_KEY;
+  if (typeof import.meta !== 'undefined' && import.meta.env && import.meta.env[key]) {
+    return import.meta.env[key];
   }
   // 2. Tenta process.env (Fallback Local)
   try {
     // @ts-ignore
-    if (typeof process !== 'undefined' && process.env && process.env.VITE_API_KEY) {
+    if (typeof process !== 'undefined' && process.env && process.env[key]) {
       // @ts-ignore
-      return process.env.VITE_API_KEY;
+      return process.env[key];
     }
   } catch (e) {}
   
   return undefined;
 };
 
-// Helper para obter a chave da ElevenLabs de forma segura
-const getElevenLabsKey = (): string | undefined => {
-  // 1. Tenta Vite (Cloudflare/Produção)
-  if (typeof import.meta !== 'undefined' && import.meta.env && import.meta.env.VITE_ELEVENLABS_API_KEY) {
-    return import.meta.env.VITE_ELEVENLABS_API_KEY;
-  }
-  // 2. Tenta process.env (Fallback Local)
-  try {
-    // @ts-ignore
-    if (typeof process !== 'undefined' && process.env && process.env.VITE_ELEVENLABS_API_KEY) {
-      // @ts-ignore
-      return process.env.VITE_ELEVENLABS_API_KEY;
-    }
-  } catch (e) {}
-
-  return undefined;
-};
-
 export const fetchDailyInspiration = async (excludeAuthors: string[] = []): Promise<InspirationQuote> => {
-  const apiKey = getApiKey();
+  const apiKey = getEnvVar('VITE_API_KEY');
   
   if (!apiKey) {
     console.error("FATAL: API Key não encontrada no ambiente.");
@@ -136,21 +118,24 @@ export const fetchDailyInspiration = async (excludeAuthors: string[] = []): Prom
   }
 };
 
-// Integração Direta ElevenLabs (Opção 1)
+// Integração ElevenLabs (Modelo Flash v2.5)
 export const fetchQuoteAudio = async (text: string): Promise<string | null> => {
   try {
-    const apiKey = getElevenLabsKey();
+    const apiKey = getEnvVar('VITE_ELEVENLABS_API_KEY');
     
+    // Check de Depuração Crítico para o Cloudflare
     if (!apiKey) {
-      console.error("ElevenLabs API Key não encontrada.");
-      alert("Aviso Admin: Chave da ElevenLabs não configurada no Cloudflare (VITE_ELEVENLABS_API_KEY). O áudio não funcionará.");
+      console.warn("⚠️ ElevenLabs: Chave não encontrada. Se você adicionou no Cloudflare, faça um REDEPLOY/RETRY do build.");
       return null;
     }
 
     // ID da voz "Rachel" - Voz feminina, clara e popular
     const VOICE_ID = "21m00Tcm4TlvDq8ikWAM"; 
+    
+    // Modelo Flash v2.5: Latência ultra-baixa (~75ms) e custo reduzido
+    const MODEL_ID = "eleven_flash_v2_5"; 
 
-    console.log("Iniciando geração de áudio ElevenLabs...");
+    console.log(`ElevenLabs: Gerando áudio com modelo ${MODEL_ID}...`);
 
     const response = await fetch(`https://api.elevenlabs.io/v1/text-to-speech/${VOICE_ID}`, {
       method: "POST",
@@ -161,7 +146,7 @@ export const fetchQuoteAudio = async (text: string): Promise<string | null> => {
       },
       body: JSON.stringify({
         text: text,
-        model_id: "eleven_multilingual_v2", // Essencial para falar Português corretamente
+        model_id: MODEL_ID,
         voice_settings: {
           stability: 0.5,
           similarity_boost: 0.75,
@@ -170,17 +155,8 @@ export const fetchQuoteAudio = async (text: string): Promise<string | null> => {
     });
 
     if (!response.ok) {
-      const errorDetail = await response.json();
-      console.error("Erro ElevenLabs API:", errorDetail);
-      
-      let errorMsg = "Erro ao gerar áudio.";
-      if (response.status === 401) {
-        errorMsg = "Erro de Autenticação ElevenLabs. Verifique a chave VITE_ELEVENLABS_API_KEY no Cloudflare.";
-      } else if (response.status === 403) {
-        errorMsg = "Bloqueio ElevenLabs. Verifique se você tem créditos/quota disponível.";
-      }
-      
-      throw new Error(errorMsg);
+      console.warn(`ElevenLabs Falhou (${response.status}). Usando fallback nativo.`);
+      return null; // Retorna null para disparar o fallback
     }
 
     // ElevenLabs retorna o binário do MP3. Convertemos para Base64 para tocar no front.
@@ -190,12 +166,10 @@ export const fetchQuoteAudio = async (text: string): Promise<string | null> => {
         .reduce((data, byte) => data + String.fromCharCode(byte), '')
     );
 
-    console.log("Áudio gerado com sucesso!");
     return base64String;
 
   } catch (error: any) {
-    console.error("Erro Audio ElevenLabs:", error);
-    alert(error.message || "Erro ao gerar áudio com ElevenLabs");
-    return null;
+    console.error("Erro Audio ElevenLabs (Catch):", error);
+    return null; // Retorna null para disparar o fallback
   }
 };

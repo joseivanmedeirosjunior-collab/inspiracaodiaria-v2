@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Share2, Quote, Copy, Check, Volume2, StopCircle, Loader2, Heart, Zap, Star } from 'lucide-react';
+import { Share2, Quote, Copy, Check, Volume2, StopCircle, Loader2, Heart, Zap, Star, Sparkles } from 'lucide-react';
 import { InspirationQuote, ReactionCounts, ReactionType } from '../types';
 import { fetchQuoteAudio } from '../services/geminiService';
 import { registerReaction, getReactions, formatDateKey } from '../services/queueService';
@@ -17,6 +17,7 @@ export const QuoteCard: React.FC<QuoteCardProps> = ({ data, loading, date }) => 
   const [isSpeaking, setIsSpeaking] = useState(false);
   const [isLoadingAudio, setIsLoadingAudio] = useState(false);
   const [audioCache, setAudioCache] = useState<string | null>(null);
+  const [audioSource, setAudioSource] = useState<'elevenlabs' | 'native' | null>(null); // 'elevenlabs' ou 'native'
   
   // Estados de Reação
   const [reactions, setReactions] = useState<ReactionCounts>({ love: 0, power: 0, sad: 0 });
@@ -31,6 +32,7 @@ export const QuoteCard: React.FC<QuoteCardProps> = ({ data, loading, date }) => 
     if (data) {
         // Resetar cache de áudio se mudar a frase
         setAudioCache(null);
+        setAudioSource(null);
         stopAudio();
 
         const loadReactions = async () => {
@@ -58,9 +60,14 @@ export const QuoteCard: React.FC<QuoteCardProps> = ({ data, loading, date }) => 
   }, []);
 
   const stopAudio = () => {
+    // Parar áudio HTML5 (ElevenLabs)
     if (audioRef.current) {
       audioRef.current.pause();
       audioRef.current.currentTime = 0;
+    }
+    // Parar áudio Nativo (Browser)
+    if (window.speechSynthesis) {
+      window.speechSynthesis.cancel();
     }
     setIsSpeaking(false);
   };
@@ -88,6 +95,35 @@ export const QuoteCard: React.FC<QuoteCardProps> = ({ data, loading, date }) => 
     setIsSpeaking(true);
   };
 
+  const playNativeSpeech = (text: string) => {
+      stopAudio();
+      
+      if (!window.speechSynthesis) {
+          alert("Seu navegador não suporta áudio.");
+          return;
+      }
+
+      const utterance = new SpeechSynthesisUtterance(text);
+      utterance.lang = 'pt-BR';
+      utterance.rate = 0.9; // Um pouco mais lento para ser poético
+      utterance.pitch = 1;
+
+      // Tenta encontrar uma voz feminina em PT-BR (melhor esforço)
+      const voices = window.speechSynthesis.getVoices();
+      const ptVoices = voices.filter(v => v.lang.includes('pt') || v.lang.includes('PT'));
+      if (ptVoices.length > 0) {
+          // Google Português do Brasil geralmente é boa
+          const googleVoice = ptVoices.find(v => v.name.includes('Google'));
+          if (googleVoice) utterance.voice = googleVoice;
+      }
+
+      utterance.onend = () => setIsSpeaking(false);
+      utterance.onerror = () => setIsSpeaking(false);
+
+      setIsSpeaking(true);
+      window.speechSynthesis.speak(utterance);
+  };
+
   const handleSpeak = async () => {
     if (!data) return;
 
@@ -96,6 +132,9 @@ export const QuoteCard: React.FC<QuoteCardProps> = ({ data, loading, date }) => 
       return;
     }
 
+    const textToSpeak = `"${data.quote}" ... ${data.author}.`;
+
+    // 1. Tenta usar Cache de Áudio de Alta Qualidade
     if (audioCache) {
       playAudioData(audioCache);
       return;
@@ -103,18 +142,23 @@ export const QuoteCard: React.FC<QuoteCardProps> = ({ data, loading, date }) => 
 
     setIsLoadingAudio(true);
     try {
-      const textToSpeak = `"${data.quote}" ... ${data.author}.`;
-      // fetchQuoteAudio agora chama ElevenLabs
+      // 2. Tenta gerar áudio novo na ElevenLabs
       const base64 = await fetchQuoteAudio(textToSpeak);
       
       if (base64) {
         setAudioCache(base64);
+        setAudioSource('elevenlabs');
         playAudioData(base64);
       } else {
-        // Erros já são logados no service, aqui apenas paramos o loading
+        // 3. FALLBACK: Se falhar ou não tiver chave, usa o nativo
+        console.log("Usando voz nativa do navegador (Fallback)");
+        setAudioSource('native');
+        playNativeSpeech(textToSpeak);
       }
     } catch (error) {
-      console.error("Falha ao obter áudio", error);
+      console.error("Falha geral no áudio, usando nativo", error);
+      setAudioSource('native');
+      playNativeSpeech(textToSpeak);
     } finally {
       setIsLoadingAudio(false);
     }
@@ -248,7 +292,7 @@ export const QuoteCard: React.FC<QuoteCardProps> = ({ data, loading, date }) => 
         <button
           onClick={handleSpeak}
           disabled={isLoadingAudio}
-          className={`w-full sm:w-auto group flex items-center justify-center gap-2.5 px-6 py-3.5 rounded-2xl font-semibold transition-all shadow-sm active:scale-95 border whitespace-nowrap ${
+          className={`relative w-full sm:w-auto group flex items-center justify-center gap-2.5 px-6 py-3.5 rounded-2xl font-semibold transition-all shadow-sm active:scale-95 border whitespace-nowrap overflow-hidden ${
             isSpeaking
               ? 'bg-red-50 text-red-500 border-red-100'
               : isLoadingAudio 
@@ -256,6 +300,13 @@ export const QuoteCard: React.FC<QuoteCardProps> = ({ data, loading, date }) => 
                 : 'bg-juro-bg text-juro-primary border-juro-secondary hover:bg-juro-secondary/30'
           }`}
         >
+          {/* Indicador de ElevenLabs (HD) - Visível enquanto não carrega e é ElevenLabs */}
+          {audioSource === 'elevenlabs' && !isLoadingAudio && (
+            <div className="absolute top-0 right-0 p-1">
+              <Sparkles size={10} className="text-amber-400 fill-amber-400 animate-pulse" />
+            </div>
+          )}
+
           {isLoadingAudio ? (
             <Loader2 size={20} className="animate-spin" />
           ) : isSpeaking ? (
