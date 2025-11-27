@@ -13,7 +13,7 @@ export const Header: React.FC = () => {
         */}
         {!imgError ? (
           <img 
-            src="public/logo.png" 
+            src="/logo.png" 
             alt="JURO Logo" 
             className="w-full h-auto drop-shadow-sm"
             onError={() => setImgError(true)}
