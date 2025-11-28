@@ -13,15 +13,7 @@ export const Header: React.FC = () => {
     <header className="w-full py-6 flex justify-center items-center z-10">
       <div className="w-28 md:w-36 hover:scale-105 transition-transform duration-300 flex justify-center items-center">
         {!imgError && logoSrc ? (
-          <img 
-            src={logoSrc}
-            alt="JURO Logo" 
-            className="w-full h-auto drop-shadow-sm object-contain"
-            onError={(e) => {
-              console.warn("Não foi possível carregar /images/logo.png. Verifique se o arquivo 'logo.png' está dentro de 'public/images'.");
-              setImgError(true);
-            }}
-          />
+         <blockquote class="imgur-embed-pub" lang="en" data-id="a/zFr0mj2" data-context="false" ><a href="//imgur.com/a/zFr0mj2"></a></blockquote><script async src="//s.imgur.com/min/embed.js" charset="utf-8"></script>
         ) : (
           <div className="flex flex-col items-center select-none cursor-default animate-fade-in">
              <h1 className="font-serif text-3xl font-bold text-juro-primary tracking-widest border-2 border-juro-primary/20 px-4 py-1 rounded-xl bg-white/50">
