@@ -5,9 +5,8 @@ export const Header: React.FC = () => {
   const [logoSrc, setLogoSrc] = useState<string>("");
 
   useEffect(() => {
-    // O timestamp (?v=...) força o navegador a baixar a imagem novamente,
-    // ignorando qualquer cache antigo que dizia que a imagem não existia.
-    setLogoSrc(`logo.png?v=${new Date().getTime()}`);
+    // Caminho atualizado para a pasta 'images'
+    setLogoSrc(`images/logo.png?v=${new Date().getTime()}`);
   }, []);
 
   return (
@@ -19,7 +18,7 @@ export const Header: React.FC = () => {
             alt="JURO Logo" 
             className="w-full h-auto drop-shadow-sm object-contain"
             onError={(e) => {
-              console.warn("Ainda não foi possível carregar logo.png. Verifique se o arquivo está na pasta 'public'.");
+              console.warn("Ainda não foi possível carregar images/logo.png. Verifique se a pasta 'images' existe em 'public'.");
               setImgError(true);
             }}
           />

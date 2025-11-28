@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Lock, Calendar, Check, RefreshCw, X, Loader2, ArrowLeft, Edit2, Save } from 'lucide-react';
+import { Calendar, Check, RefreshCw, X, Loader2, ArrowLeft, Edit2, Save } from 'lucide-react';
 import { fetchDailyInspiration } from '../services/geminiService';
 import { getQueue, updateQueueItem, formatDateKey } from '../services/queueService';
 import { QueueItem, InspirationQuote } from '../types';
@@ -239,11 +239,25 @@ export const AdminPanel: React.FC = () => {
     return (
       <div className="flex flex-col items-center justify-center min-h-[60vh] w-full px-4">
         <div className="bg-white p-8 rounded-3xl shadow-lg border border-pink-100 max-w-sm w-full text-center animate-fade-in">
-          <div className="mb-6 text-juro-primary flex justify-center">
-            <div className="p-4 bg-pink-50 rounded-full">
-              <Lock size={32} />
-            </div>
+          
+          {/* Logo Brand Enforcement: Substitui o cadeado pela Logo */}
+          <div className="mb-6 flex justify-center">
+             <img 
+               src={`images/logo.png?v=${new Date().getTime()}`} 
+               alt="JURO Admin" 
+               className="w-24 h-auto object-contain hover:scale-110 transition-transform duration-300"
+               onError={(e) => {
+                 // Fallback visual caso a imagem não carregue
+                 e.currentTarget.style.display = 'none';
+                 const fallback = document.getElementById('logo-fallback');
+                 if(fallback) fallback.style.display = 'flex';
+               }}
+             />
+             <div id="logo-fallback" className="hidden p-4 bg-pink-50 rounded-full text-juro-primary font-serif font-bold border border-pink-100">
+               JURO
+             </div>
           </div>
+
           <h2 className="text-2xl font-serif font-bold text-juro-text mb-6">Acesso Admin</h2>
           <form onSubmit={handleLogin} className="space-y-4">
             <input
