@@ -18,6 +18,9 @@ export const AdminPanel: React.FC = () => {
   // Referência para controlar o loop de geração automática
   const autoFillRef = useRef(false);
 
+  const PNG_LOGO = '/images/logo.png';
+  const SVG_LOGO = '/images/logo.svg';
+
   // Verifica sessão ao carregar
   useEffect(() => {
     const sessionAuth = sessionStorage.getItem('juro_admin_auth');
@@ -240,22 +243,19 @@ export const AdminPanel: React.FC = () => {
       <div className="flex flex-col items-center justify-center min-h-[60vh] w-full px-4">
         <div className="bg-white p-8 rounded-3xl shadow-lg border border-pink-100 max-w-sm w-full text-center animate-fade-in">
           
-          {/* Logo Brand Enforcement: Substitui o cadeado pela Logo */}
+          {/* Logo Brand Enforcement: Fallback Inteligente */}
           <div className="mb-6 flex justify-center">
              <img 
-               src={`/images/logo.png?v=${new Date().getTime()}`} 
+               src={PNG_LOGO} 
                alt="JURO Admin" 
                className="w-24 h-auto object-contain hover:scale-110 transition-transform duration-300"
                onError={(e) => {
-                 // Fallback visual caso a imagem não carregue
-                 e.currentTarget.style.display = 'none';
-                 const fallback = document.getElementById('logo-fallback');
-                 if(fallback) fallback.style.display = 'flex';
+                 const target = e.target as HTMLImageElement;
+                 if (target.src.includes(PNG_LOGO)) {
+                   target.src = SVG_LOGO;
+                 }
                }}
              />
-             <div id="logo-fallback" className="hidden p-4 bg-pink-50 rounded-full text-juro-primary font-serif font-bold border border-pink-100">
-               JURO
-             </div>
           </div>
 
           <h2 className="text-2xl font-serif font-bold text-juro-text mb-6">Acesso Admin</h2>
