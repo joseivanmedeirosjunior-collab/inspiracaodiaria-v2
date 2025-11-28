@@ -5,8 +5,8 @@ export const Header: React.FC = () => {
   const [logoSrc, setLogoSrc] = useState<string>("");
 
   useEffect(() => {
-    // Caminho atualizado para a pasta 'images'
-    setLogoSrc(`images/logo.png?v=${new Date().getTime()}`);
+    // Adicionada a barra '/' no início: /images/logo.png
+    setLogoSrc(`/images/logo.png?v=${new Date().getTime()}`);
   }, []);
 
   return (
@@ -18,7 +18,7 @@ export const Header: React.FC = () => {
             alt="JURO Logo" 
             className="w-full h-auto drop-shadow-sm object-contain"
             onError={(e) => {
-              console.warn("Ainda não foi possível carregar images/logo.png. Verifique se a pasta 'images' existe em 'public'.");
+              console.warn("Não foi possível carregar /images/logo.png. Verifique se o arquivo 'logo.png' está dentro de 'public/images'.");
               setImgError(true);
             }}
           />

@@ -243,7 +243,7 @@ export const AdminPanel: React.FC = () => {
           {/* Logo Brand Enforcement: Substitui o cadeado pela Logo */}
           <div className="mb-6 flex justify-center">
              <img 
-               src={`images/logo.png?v=${new Date().getTime()}`} 
+               src={`/images/logo.png?v=${new Date().getTime()}`} 
                alt="JURO Admin" 
                className="w-24 h-auto object-contain hover:scale-110 transition-transform duration-300"
                onError={(e) => {
