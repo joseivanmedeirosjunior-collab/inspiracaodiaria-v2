@@ -18,7 +18,8 @@ export const AdminPanel: React.FC = () => {
   // Referência para controlar o loop de geração automática
   const autoFillRef = useRef(false);
 
-  const PNG_LOGO = '/images/logo.png';
+  // Usando link direto do Imgur
+  const PNG_LOGO = 'https://i.imgur.com/F7AFrLG.png';
   const SVG_LOGO = '/images/logo.svg';
 
   // Verifica sessão ao carregar
@@ -251,7 +252,7 @@ export const AdminPanel: React.FC = () => {
                className="w-24 h-auto object-contain hover:scale-110 transition-transform duration-300"
                onError={(e) => {
                  const target = e.target as HTMLImageElement;
-                 if (target.src.includes(PNG_LOGO)) {
+                 if (target.src !== window.location.origin + SVG_LOGO) {
                    target.src = SVG_LOGO;
                  }
                }}

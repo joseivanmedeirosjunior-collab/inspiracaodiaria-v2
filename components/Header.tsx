@@ -2,7 +2,8 @@ import React, { useState, useEffect } from 'react';
 
 export const Header: React.FC = () => {
   // Caminhos das imagens
-  const PNG_LOGO = '/images/logo.png';
+  // Usando link direto do Imgur para garantir persistência independente do GitHub
+  const PNG_LOGO = 'https://i.imgur.com/F7AFrLG.png';
   const SVG_LOGO = '/images/logo.svg';
 
   return (
@@ -13,15 +14,13 @@ export const Header: React.FC = () => {
           alt="JURO Logo" 
           className="w-full h-auto drop-shadow-sm object-contain"
           onError={(e) => {
-            // Se o PNG falhar (sumiu do git), carrega o SVG (que é código e nunca some)
+            // Se o Imgur falhar, carrega o SVG local (que é código e nunca some)
             const target = e.target as HTMLImageElement;
-            if (target.src.includes(PNG_LOGO)) {
+            if (target.src !== window.location.origin + SVG_LOGO) {
               target.src = SVG_LOGO;
             } else {
-              // Se até o SVG falhar (muito raro), esconde a imagem
               target.style.display = 'none';
-              // Mostra o texto fallback via CSS ou manipulação se necessário, 
-              // mas o SVG deve garantir a exibição.
+              document.getElementById('text-fallback')?.classList.remove('hidden');
             }
           }}
         />
