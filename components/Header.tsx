@@ -12,6 +12,7 @@ export const Header: React.FC = () => {
         <img 
           src={PNG_LOGO}
           alt="JURO Logo" 
+          referrerPolicy="no-referrer"
           className="w-full h-auto drop-shadow-sm object-contain"
           onError={(e) => {
             // Se o Imgur falhar, carrega o SVG local (que é código e nunca some)

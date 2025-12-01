@@ -249,6 +249,7 @@ export const AdminPanel: React.FC = () => {
              <img 
                src={PNG_LOGO} 
                alt="JURO Admin" 
+               referrerPolicy="no-referrer"
                className="w-24 h-auto object-contain hover:scale-110 transition-transform duration-300"
                onError={(e) => {
                  const target = e.target as HTMLImageElement;
