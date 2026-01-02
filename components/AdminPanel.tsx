@@ -1,8 +1,10 @@
+
 import React, { useState, useEffect, useRef } from 'react';
 import { Calendar, Check, RefreshCw, X, Loader2, ArrowLeft, Edit2, Save } from 'lucide-react';
 import { fetchDailyInspiration } from '../services/geminiService';
 import { getQueue, updateQueueItem, formatDateKey } from '../services/queueService';
 import { QueueItem, InspirationQuote } from '../types';
+import { Logo } from './Logo';
 
 export const AdminPanel: React.FC = () => {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
@@ -11,18 +13,11 @@ export const AdminPanel: React.FC = () => {
   const [loadingQueue, setLoadingQueue] = useState(false);
   const [loadingDates, setLoadingDates] = useState<Record<string, boolean>>({});
   
-  // Estados para Edição Manual
   const [editingDate, setEditingDate] = useState<string | null>(null);
   const [editForm, setEditForm] = useState<InspirationQuote>({ quote: '', author: '', role: '', country: '' });
 
-  // Referência para controlar o loop de geração automática
   const autoFillRef = useRef(false);
 
-  // Usando link direto do Imgur
-  const PNG_LOGO = 'https://i.imgur.com/F7AFrLG.png';
-  const SVG_LOGO = '/images/logo.svg';
-
-  // Verifica sessão ao carregar
   useEffect(() => {
     const sessionAuth = sessionStorage.getItem('juro_admin_auth');
     if (sessionAuth === 'true') {
@@ -30,28 +25,25 @@ export const AdminPanel: React.FC = () => {
     }
   }, []);
 
-  // Carrega a fila ao autenticar
   useEffect(() => {
     if (isAuthenticated) {
-      const fetchQueue = async () => {
+      const fetchQueueData = async () => {
         setLoadingQueue(true);
         const storedQueue = await getQueue();
         setQueue(storedQueue);
         setLoadingQueue(false);
-        autoFillRef.current = true; // Ativa o gatilho para preenchimento automático após carregar dados
+        autoFillRef.current = true;
       };
-      fetchQueue();
+      fetchQueueData();
     }
   }, [isAuthenticated]);
 
-  // Helper para pegar lista de autoras já usadas (para evitar repetição)
   const getUsedAuthors = (): string[] => {
     return Object.values(queue)
       .filter((item: QueueItem) => item.data && item.data.author)
       .map((item: QueueItem) => item.data!.author.trim());
   };
 
-  // Efeito para preenchimento automático sequencial
   useEffect(() => {
     if (!isAuthenticated || !autoFillRef.current || loadingQueue) return;
 
@@ -64,7 +56,6 @@ export const AdminPanel: React.FC = () => {
         currentDate.setDate(today.getDate() + i);
         const dateKey = formatDateKey(currentDate);
         
-        // Se não tem nada na fila para este dia E não estamos carregando ele agora
         if (!queue[dateKey] && !loadingDates[dateKey]) {
           await handleGenerate(currentDate, true); 
           return; 
@@ -79,20 +70,14 @@ export const AdminPanel: React.FC = () => {
 
   const handleLogin = (e: React.FormEvent) => {
     e.preventDefault();
-    
     let correctPassword = 'admin';
-    
-    // Leitura Defensiva da Senha
     try {
-        // Tenta acessar import.meta.env de forma segura
         // @ts-ignore
         const env = import.meta.env;
         if (env && env.VITE_ADMIN_PASSWORD) {
             correctPassword = env.VITE_ADMIN_PASSWORD;
         }
-    } catch (error) {
-        console.warn("Ambiente não suporta import.meta.env ou variável não definida.");
-    }
+    } catch (error) {}
 
     if (password === correctPassword) {
       setIsAuthenticated(true);
@@ -116,13 +101,7 @@ export const AdminPanel: React.FC = () => {
     
     try {
       const usedAuthors = getUsedAuthors();
-      
-      if (!isAuto) {
-        console.log(`Gerando para ${dateKey}. Excluindo ${usedAuthors.length} autoras.`);
-      }
-
       const newQuote = await fetchDailyInspiration(usedAuthors);
-      
       await updateQueueItem(date, 'draft', newQuote);
       
       setQueue(prev => ({
@@ -136,12 +115,7 @@ export const AdminPanel: React.FC = () => {
     } catch (error: any) {
       console.error("Erro ao gerar frase", error);
       if (!isAuto) {
-         const msg = error.message || "Erro desconhecido ao conectar com a IA.";
-         if (msg.includes("bloqueada") || msg.includes("leaked") || msg.includes("403")) {
-             alert("ERRO CRÍTICO: A Chave de API foi bloqueada pelo Google (vazada). Acesse o Cloudflare e atualize a variável VITE_API_KEY com uma nova chave.");
-         } else {
-             alert(`Erro ao gerar frase: ${msg}`);
-         }
+         alert(`Erro ao gerar frase: ${error.message || "Verifique sua chave API."}`);
       }
     } finally {
       setLoadingDates(prev => ({ ...prev, [dateKey]: false }));
@@ -162,70 +136,37 @@ export const AdminPanel: React.FC = () => {
   };
 
   const handleReject = async (date: Date) => {
-    if (window.confirm('⚠️ Atenção\n\nTem certeza que deseja cancelar a aprovação desta frase?\n\nEla voltará para o status de RASCUNHO e não será exibida no app até ser aprovada novamente.')) {
+    if (window.confirm('Deseja cancelar a aprovação?')) {
         const dateKey = formatDateKey(date);
         const currentItem = queue[dateKey];
-        
         try {
-          if (currentItem && currentItem.data) {
-             await updateQueueItem(date, 'draft', currentItem.data);
-             setQueue(prev => ({
-                ...prev,
-                [dateKey]: { ...prev[dateKey], status: 'draft' }
-             }));
-          } else {
-             await updateQueueItem(date, 'draft');
-             setQueue(prev => ({
-                ...prev,
-                [dateKey]: { ...prev[dateKey], status: 'draft' }
-             }));
-          }
-        } catch (e) {
-          console.error("Erro ao rejeitar:", e);
-          alert("Erro ao cancelar aprovação. Tente novamente.");
-        }
+          await updateQueueItem(date, 'draft', currentItem?.data);
+          setQueue(prev => ({
+            ...prev,
+            [dateKey]: { ...prev[dateKey], status: 'draft' }
+          }));
+        } catch (e) { console.error(e); }
     }
   };
 
   const startEditing = (dateKey: string, currentData?: InspirationQuote) => {
     setEditingDate(dateKey);
-    if (currentData) {
-      setEditForm(currentData);
-    } else {
-      setEditForm({ quote: '', author: '', role: '', country: '' });
-    }
-  };
-
-  const cancelEditing = () => {
-    setEditingDate(null);
-    setEditForm({ quote: '', author: '', role: '', country: '' });
+    if (currentData) setEditForm(currentData);
+    else setEditForm({ quote: '', author: '', role: '', country: '' });
   };
 
   const saveManualEdit = async (date: Date) => {
-    if (!editForm.quote || !editForm.author) {
-      alert("Preencha pelo menos a Frase e a Autora.");
-      return;
-    }
-    
     const dateKey = formatDateKey(date);
     setLoadingDates(prev => ({ ...prev, [dateKey]: true }));
-
     try {
       await updateQueueItem(date, 'draft', editForm);
       setQueue(prev => ({
         ...prev,
-        [dateKey]: {
-          date: dateKey,
-          status: 'draft',
-          data: editForm
-        }
+        [dateKey]: { date: dateKey, status: 'draft', data: editForm }
       }));
       setEditingDate(null);
-    } catch (e) {
-      console.error(e);
-    } finally {
-      setLoadingDates(prev => ({ ...prev, [dateKey]: false }));
-    }
+    } catch (e) { console.error(e); }
+    finally { setLoadingDates(prev => ({ ...prev, [dateKey]: false })); }
   };
 
   const getNext30Days = () => {
@@ -243,23 +184,9 @@ export const AdminPanel: React.FC = () => {
     return (
       <div className="flex flex-col items-center justify-center min-h-[60vh] w-full px-4">
         <div className="bg-white p-8 rounded-3xl shadow-lg border border-pink-100 max-w-sm w-full text-center animate-fade-in">
-          
-          {/* Logo Brand Enforcement: Fallback Inteligente */}
           <div className="mb-6 flex justify-center">
-             <img 
-               src={PNG_LOGO} 
-               alt="JURO Admin" 
-               referrerPolicy="no-referrer"
-               className="w-24 h-auto object-contain hover:scale-110 transition-transform duration-300"
-               onError={(e) => {
-                 const target = e.target as HTMLImageElement;
-                 if (target.src !== window.location.origin + SVG_LOGO) {
-                   target.src = SVG_LOGO;
-                 }
-               }}
-             />
+             <Logo size="sm" />
           </div>
-
           <h2 className="text-2xl font-serif font-bold text-juro-text mb-6">Acesso Admin</h2>
           <form onSubmit={handleLogin} className="space-y-4">
             <input
@@ -269,20 +196,12 @@ export const AdminPanel: React.FC = () => {
               placeholder="Digite a senha"
               className="w-full px-4 py-3 rounded-xl border border-gray-200 focus:outline-none focus:ring-2 focus:ring-juro-primary/50 text-center"
             />
-            <button
-              type="submit"
-              className="w-full bg-juro-primary text-white font-bold py-3 rounded-xl hover:bg-pink-600 transition-colors shadow-md hover:shadow-lg transform active:scale-95 duration-200"
-            >
+            <button type="submit" className="w-full bg-juro-primary text-white font-bold py-3 rounded-xl hover:bg-pink-600 transition-colors shadow-md">
               Entrar no Painel
             </button>
           </form>
-          
-          <button 
-            onClick={() => window.location.hash = ''}
-            className="mt-8 flex items-center justify-center gap-2 w-full text-sm text-gray-400 hover:text-juro-primary transition-colors py-2"
-          >
-            <ArrowLeft size={14} />
-            Voltar para Frase do Dia
+          <button onClick={() => window.location.hash = ''} className="mt-8 flex items-center justify-center gap-2 w-full text-sm text-gray-400 hover:text-juro-primary py-2">
+            <ArrowLeft size={14} /> Voltar para o App
           </button>
         </div>
       </div>
@@ -293,24 +212,15 @@ export const AdminPanel: React.FC = () => {
     <div className="w-full max-w-5xl mx-auto px-4 py-8 pb-24">
       <div className="flex flex-col md:flex-row md:items-center justify-between mb-8 gap-4 bg-white p-6 rounded-2xl shadow-sm border border-pink-50">
         <div className="flex items-center gap-4">
-          <button 
-            onClick={() => window.location.hash = ''}
-            className="p-3 rounded-full bg-pink-50 hover:bg-pink-100 text-juro-primary transition-colors"
-            title="Voltar para o App"
-          >
+          <button onClick={() => window.location.hash = ''} className="p-3 rounded-full bg-pink-50 hover:bg-pink-100 text-juro-primary">
             <ArrowLeft size={24} />
           </button>
           <div>
              <h1 className="text-2xl md:text-3xl font-serif font-bold text-juro-text">Gerenciador Editorial</h1>
-             <p className="text-sm text-gray-500">
-                {loadingQueue ? 'Sincronizando...' : 'Planeje as frases dos próximos 30 dias'}
-             </p>
+             <p className="text-sm text-gray-500">{loadingQueue ? 'Sincronizando...' : 'Planeje os próximos 30 dias'}</p>
           </div>
         </div>
-        <button 
-          onClick={handleLogout}
-          className="px-4 py-2 text-sm text-red-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
-        >
+        <button onClick={handleLogout} className="px-4 py-2 text-sm text-red-400 hover:text-red-600 hover:bg-red-50 rounded-lg">
           Sair do Sistema
         </button>
       </div>
@@ -318,7 +228,7 @@ export const AdminPanel: React.FC = () => {
       {loadingQueue ? (
           <div className="flex flex-col items-center justify-center py-20">
               <Loader2 size={48} className="text-juro-primary animate-spin mb-4" />
-              <p className="text-gray-500">Carregando suas frases...</p>
+              <p className="text-gray-500">Carregando...</p>
           </div>
       ) : (
           <div className="space-y-6">
@@ -329,81 +239,32 @@ export const AdminPanel: React.FC = () => {
               const isApproved = item?.status === 'approved';
               const hasDraft = item?.status === 'draft' || isApproved;
               const isEditing = editingDate === dateKey;
-              
-              const formattedDate = new Intl.DateTimeFormat('pt-BR', {
-                weekday: 'long',
-                day: 'numeric',
-                month: 'long'
-              }).format(date);
+              const formattedDate = new Intl.DateTimeFormat('pt-BR', { weekday: 'long', day: 'numeric', month: 'long' }).format(date);
 
               return (
-                <div 
-                  key={dateKey} 
-                  className={`bg-white rounded-2xl p-6 border-2 transition-all relative overflow-hidden ${
-                    isApproved 
-                      ? 'border-green-200 shadow-sm' 
-                      : isEditing 
-                        ? 'border-juro-primary ring-4 ring-pink-50 shadow-lg z-10'
-                        : 'border-pink-50 shadow-sm hover:border-pink-200'
-                  }`}
-                >
-                  <div className={`absolute top-0 right-0 px-3 py-1 rounded-bl-xl text-xs font-bold uppercase tracking-wider
-                    ${isApproved ? 'bg-green-100 text-green-700' : hasDraft ? 'bg-yellow-50 text-yellow-600' : 'bg-gray-100 text-gray-400'}`}>
+                <div key={dateKey} className={`bg-white rounded-2xl p-6 border-2 transition-all relative overflow-hidden ${isApproved ? 'border-green-200 shadow-sm' : isEditing ? 'border-juro-primary ring-4 ring-pink-50 shadow-lg z-10' : 'border-pink-50 shadow-sm hover:border-pink-200'}`}>
+                  <div className={`absolute top-0 right-0 px-3 py-1 rounded-bl-xl text-xs font-bold uppercase tracking-wider ${isApproved ? 'bg-green-100 text-green-700' : hasDraft ? 'bg-yellow-50 text-yellow-600' : 'bg-gray-100 text-gray-400'}`}>
                     {isApproved ? 'Aprovado' : hasDraft ? 'Rascunho' : 'Vazio'}
                   </div>
-
                   <div className="flex flex-col md:flex-row md:items-start gap-6 mt-2">
                     <div className="min-w-[200px] md:border-r md:border-pink-50 pr-4">
                       <div className="flex items-center gap-2 text-juro-primary mb-1">
-                        <Calendar size={20} />
-                        <span className="font-bold text-lg">{date.getDate()}</span>
+                        <Calendar size={20} /><span className="font-bold text-lg">{date.getDate()}</span>
                       </div>
                       <p className="capitalize text-gray-600 font-medium">{formattedDate}</p>
-                      <p className="text-xs text-gray-400 mt-1">{date.getFullYear()}</p>
                     </div>
-
                     <div className="flex-grow w-full">
                       {isEditing ? (
                         <div className="bg-gray-50 p-4 rounded-xl space-y-3 border border-gray-200">
-                            <div className="space-y-1">
-                                <label className="text-xs font-bold text-gray-500 uppercase">Frase</label>
-                                <textarea 
-                                    className="w-full p-3 rounded-lg border border-gray-300 focus:ring-2 focus:ring-juro-primary text-juro-text font-serif"
-                                    rows={3}
-                                    value={editForm.quote}
-                                    onChange={(e) => setEditForm({...editForm, quote: e.target.value})}
-                                    placeholder="Digite a frase inspiradora aqui..."
-                                />
-                            </div>
+                            <textarea className="w-full p-3 rounded-lg border border-gray-300 font-serif" rows={3} value={editForm.quote} onChange={(e) => setEditForm({...editForm, quote: e.target.value})} />
                             <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-                                <div>
-                                    <label className="text-xs font-bold text-gray-500 uppercase">Autora</label>
-                                    <input 
-                                        className="w-full p-2 rounded-lg border border-gray-300 focus:ring-2 focus:ring-juro-primary"
-                                        value={editForm.author}
-                                        onChange={(e) => setEditForm({...editForm, author: e.target.value})}
-                                    />
-                                </div>
-                                <div>
-                                    <label className="text-xs font-bold text-gray-500 uppercase">Profissão</label>
-                                    <input 
-                                        className="w-full p-2 rounded-lg border border-gray-300 focus:ring-2 focus:ring-juro-primary"
-                                        value={editForm.role}
-                                        onChange={(e) => setEditForm({...editForm, role: e.target.value})}
-                                    />
-                                </div>
-                                <div>
-                                    <label className="text-xs font-bold text-gray-500 uppercase">País</label>
-                                    <input 
-                                        className="w-full p-2 rounded-lg border border-gray-300 focus:ring-2 focus:ring-juro-primary"
-                                        value={editForm.country}
-                                        onChange={(e) => setEditForm({...editForm, country: e.target.value})}
-                                    />
-                                </div>
+                                <input className="w-full p-2 rounded-lg border border-gray-300" placeholder="Autora" value={editForm.author} onChange={(e) => setEditForm({...editForm, author: e.target.value})} />
+                                <input className="w-full p-2 rounded-lg border border-gray-300" placeholder="Profissão" value={editForm.role} onChange={(e) => setEditForm({...editForm, role: e.target.value})} />
+                                <input className="w-full p-2 rounded-lg border border-gray-300" placeholder="País" value={editForm.country} onChange={(e) => setEditForm({...editForm, country: e.target.value})} />
                             </div>
-                            <div className="flex justify-end gap-2 mt-2">
-                                <button onClick={cancelEditing} className="px-4 py-2 text-sm text-gray-500 hover:bg-gray-200 rounded-lg">Cancelar</button>
-                                <button onClick={() => saveManualEdit(date)} className="px-4 py-2 text-sm bg-juro-primary text-white hover:bg-pink-600 rounded-lg font-bold flex items-center gap-2">
+                            <div className="flex justify-end gap-2">
+                                <button onClick={() => setEditingDate(null)} className="px-4 py-2 text-sm text-gray-500">Cancelar</button>
+                                <button onClick={() => saveManualEdit(date)} className="px-4 py-2 text-sm bg-juro-primary text-white rounded-lg font-bold flex items-center gap-2">
                                     {isLoading ? <Loader2 size={16} className="animate-spin"/> : <Save size={16} />} Salvar
                                 </button>
                             </div>
@@ -412,63 +273,32 @@ export const AdminPanel: React.FC = () => {
                         <>
                           {hasDraft && item?.data ? (
                             <div className="mb-6">
-                              <p className="text-xl font-serif italic text-juro-text mb-3 leading-relaxed">"{item.data.quote}"</p>
-                              <div className="flex items-center gap-2 flex-wrap">
-                                <span className="font-bold text-juro-primary text-sm uppercase tracking-wide">— {item.data.author}</span>
-                                <span className="text-gray-300">|</span>
-                                <span className="text-xs text-gray-500">{item.data.role}</span>
-                                <span className="text-xs text-gray-500">{item.data.country}</span>
-                              </div>
+                              <p className="text-xl font-serif italic text-juro-text mb-3">"{item.data.quote}"</p>
+                              <p className="font-bold text-juro-primary text-sm uppercase">— {item.data.author} | {item.data.role} | {item.data.country}</p>
                             </div>
-                          ) : (
-                            <div className="flex flex-col items-center justify-center py-8 border-2 border-dashed border-gray-100 rounded-xl bg-gray-50/50 mb-4">
-                              <p className="text-gray-400 text-sm font-medium">Ainda não há inspiração para este dia.</p>
-                            </div>
-                          )}
-
+                          ) : <div className="py-8 border-2 border-dashed border-gray-100 rounded-xl bg-gray-50/50 mb-4 text-center text-gray-400">Vazio</div>}
                           <div className="flex flex-wrap items-center gap-3 pt-2 border-t border-gray-100">
                             {!isApproved && (
-                                <button
-                                    onClick={() => handleGenerate(date)}
-                                    disabled={isLoading}
-                                    className="flex items-center gap-2 px-4 py-2 rounded-lg bg-pink-50 text-juro-primary hover:bg-pink-100 font-medium text-sm transition-colors disabled:opacity-50"
-                                >
-                                    {isLoading ? <Loader2 size={16} className="animate-spin" /> : <RefreshCw size={16} />}
-                                    {hasDraft ? 'Gerar Outra' : 'Gerar Automático'}
+                                <button onClick={() => handleGenerate(date)} disabled={isLoading} className="flex items-center gap-2 px-4 py-2 rounded-lg bg-pink-50 text-juro-primary text-sm transition-colors">
+                                    {isLoading ? <Loader2 size={16} className="animate-spin" /> : <RefreshCw size={16} />} {hasDraft ? 'Gerar Outra' : 'Gerar'}
                                 </button>
                             )}
                             {!isApproved && (
-                                <button 
-                                    onClick={() => startEditing(dateKey, item?.data)}
-                                    className="flex items-center gap-2 px-4 py-2 rounded-lg bg-gray-100 text-gray-600 hover:bg-gray-200 font-medium text-sm transition-colors"
-                                >
-                                    <Edit2 size={16} />
-                                    {hasDraft ? 'Editar' : 'Manual'}
+                                <button onClick={() => startEditing(dateKey, item?.data)} className="flex items-center gap-2 px-4 py-2 rounded-lg bg-gray-100 text-gray-600 text-sm">
+                                    <Edit2 size={16} /> {hasDraft ? 'Editar' : 'Manual'}
                                 </button>
                             )}
                             {hasDraft && !isApproved && (
-                              <div className="ml-auto pl-4 border-l border-gray-100">
-                                <button
-                                  onClick={() => handleApprove(date, item!.data!)}
-                                  className="flex items-center gap-2 px-6 py-2 rounded-lg bg-green-500 text-white hover:bg-green-600 shadow-md hover:shadow-lg transform active:scale-95 transition-all font-bold text-sm"
-                                >
-                                  <Check size={18} />
-                                  Aprovar
+                                <button onClick={() => handleApprove(date, item!.data!)} className="ml-auto px-6 py-2 rounded-lg bg-green-500 text-white font-bold text-sm shadow-md">
+                                  <Check size={18} /> Aprovar
                                 </button>
-                              </div>
                             )}
                             {isApproved && (
                               <div className="flex items-center justify-between w-full md:w-auto ml-auto">
                                 <span className="flex items-center gap-2 text-green-600 font-bold text-sm bg-green-50 px-4 py-2 rounded-lg border border-green-100 mr-2">
-                                  <Check size={16} />
-                                  Agendado
+                                  <Check size={16} /> Agendado
                                 </span>
-                                <button
-                                  onClick={() => handleReject(date)}
-                                  className="text-xs text-orange-400 hover:text-orange-600 hover:bg-orange-50 px-3 py-1 rounded transition-colors"
-                                >
-                                  Cancelar
-                                </button>
+                                <button onClick={() => handleReject(date)} className="text-xs text-orange-400">Cancelar</button>
                               </div>
                             )}
                           </div>
